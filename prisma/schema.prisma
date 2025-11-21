@@ -24,9 +24,9 @@ model LottoNumber {
   drwtNo5        Int
   drwtNo6        Int
   bnusNo         Int
-  firstPrzwnerCo String
-  firstWinamnt   String
-  totSellamnt    String
-  firstAccumamnt String
+  firstPrzwnerCo String // 1등 당첨자 수
+  firstWinamnt   String // 1등 당첨금액
+  totSellamnt    String // 총 판매금액
+  firstAccumamnt String // 1등 누적 당첨금액
   createdAt      DateTime @default(now())
 }

@@ -3,10 +3,18 @@ dotenv.config(); // .env 파일 로드
 import express, { Request, Response, NextFunction } from "express";
 import { PrismaClient } from "@prisma/client";
 import cors from "cors";
-import lottoRouter from "./routes/lotto";
+import lottoSimpleRouter from "./routes/simple";
+import lottoHistoryRouter from "./routes/history";
+import lottoFrequencyRouter from "./routes/frequency";
+import lottoSimilarRouter from "./routes/similar";
+import { getLottoData } from "./lib/lottoCache";
 
 export const app = express();
 export const prisma = new PrismaClient();
+
+(async () => {
+  await getLottoData();
+})();
 
 // CORS 미들웨어 등록
 app.use(
@@ -18,7 +26,10 @@ app.use(
 app.use(express.json());
 
 // Lotto API 라우터 등록
-app.use("/api/lotto", lottoRouter);
+app.use("/api/lotto/simple", lottoSimpleRouter);
+app.use("/api/lotto/history", lottoHistoryRouter);
+app.use("/api/lotto/frequency", lottoFrequencyRouter);
+app.use("/api/lotto/similar", lottoSimilarRouter);
 
 // 기본 라우트
 app.get("/", (req: Request, res: Response) => {
