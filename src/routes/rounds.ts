@@ -1,30 +1,14 @@
 import { Router, Request, Response } from "express";
-import { sortedLottoCache } from "../lib/lottoCache";
 import { LottoNumber } from "../types/lotto";
 import { ApiResponse } from "../types/api";
+import { sortedLottoCache } from "../lib/lottoCache";
 
 const router = Router();
 
-const getNumbers = (item: LottoNumber, isIncludeBonus: boolean) => [
-  item.drwtNo1,
-  item.drwtNo2,
-  item.drwtNo3,
-  item.drwtNo4,
-  item.drwtNo5,
-  item.drwtNo6,
-  ...(isIncludeBonus ? [item.bnusNo] : []),
-];
-
-interface AnalysisResult {
-  numbers: number[];
-  similarRound: number;
-}
-
-router.get("/", (req: Request, res: Response) => {
+// GET /api/lotto/rounds?start=900&end=950
+router.get("/", async (req: Request, res: Response) => {
   const start = Number(req.query.start);
   const endRaw = Number(req.query.end);
-  const minMatch = Number(req.query.minMatch) || 4;
-  const includeBonus = req.query.includeBonus === "true";
 
   // 1) 숫자 체크
   if (Number.isNaN(start) || Number.isNaN(endRaw)) {
@@ -61,34 +45,28 @@ router.get("/", (req: Request, res: Response) => {
   }
 
   // 3) 최대 회차 보정
-  const latestRound = sortedLottoCache[sortedLottoCache.length - 1];
-  const end = Math.min(endRaw, latestRound.drwNo);
-  const latestNumbers = getNumbers(latestRound, includeBonus);
+  const maxRound = sortedLottoCache[sortedLottoCache.length - 1].drwNo;
+  const end = Math.min(endRaw, maxRound);
 
   // 4) 범위 필터링
   const records = sortedLottoCache.filter(
     (rec) => rec.drwNo >= start && rec.drwNo <= end
   );
 
-  const similarRounds: AnalysisResult[] = records
-    .filter((item) => {
-      const numbers = getNumbers(item, includeBonus);
-      const matchCount = numbers.filter((n) =>
-        latestNumbers.includes(n)
-      ).length;
-      return matchCount >= minMatch;
-    })
-    .map((item) => ({
-      similarRound: item.drwNo,
-      numbers: getNumbers(item, includeBonus),
-    }))
-    .sort((a, b) => b.similarRound - a.similarRound);
+  if (records.length === 0) {
+    return res.status(404).json({
+      success: false,
+      error: "EMPTY_RESULT",
+      message: "해당 범위 내 로또 정보가 없습니다.",
+    } satisfies ApiResponse<null>);
+  }
 
+  // 5) 반환
   return res.json({
     success: true,
-    data: similarRounds,
-    message: "최신 회차와 유사한 회차 정보 (회차번호 + 당첨번호)",
-  } satisfies ApiResponse<AnalysisResult[]>);
+    data: records,
+    message: `${start}~${end} 회차 로또 데이터`,
+  } satisfies ApiResponse<LottoNumber[]>);
 });
 
 export default router;
