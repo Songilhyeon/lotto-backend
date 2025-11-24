@@ -5,19 +5,34 @@ import { ApiResponse } from "../types/api";
 
 const router = Router();
 
-const getNumbers = (item: LottoNumber, isIncludeBonus: boolean) => [
+const getNumbers = (item: LottoNumber, includeBonus: boolean) => [
   item.drwtNo1,
   item.drwtNo2,
   item.drwtNo3,
   item.drwtNo4,
   item.drwtNo5,
   item.drwtNo6,
-  ...(isIncludeBonus ? [item.bnusNo] : []),
+  ...(includeBonus ? [item.bnusNo] : []),
 ];
 
+// --- 타입 ---
 interface AnalysisResult {
   numbers: number[];
-  similarRound: number;
+  round: number;
+  nextNumbers: number[];
+}
+
+// interface AnalysisResultWithNextFreq {
+//   nextFrequency: Record<number, number>;
+// }
+
+interface SelectedRound {
+  numbers: number[];
+  round: number;
+}
+
+interface InternalResult extends AnalysisResult {
+  matchCount: number;
 }
 
 router.get("/", (req: Request, res: Response) => {
@@ -26,7 +41,7 @@ router.get("/", (req: Request, res: Response) => {
   const minMatch = Number(req.query.minMatch) || 4;
   const includeBonus = req.query.includeBonus === "true";
 
-  // 1) 숫자 체크
+  // --- parameter 검증 ---
   if (Number.isNaN(start) || Number.isNaN(endRaw)) {
     return res.status(400).json({
       success: false,
@@ -51,7 +66,6 @@ router.get("/", (req: Request, res: Response) => {
     } satisfies ApiResponse<null>);
   }
 
-  // 2) 캐시 검사
   if (sortedLottoCache.length === 0) {
     return res.status(500).json({
       success: false,
@@ -60,35 +74,76 @@ router.get("/", (req: Request, res: Response) => {
     } satisfies ApiResponse<null>);
   }
 
-  // 3) 최대 회차 보정
   const latestRound = sortedLottoCache[sortedLottoCache.length - 1];
   const end = Math.min(endRaw, latestRound.drwNo);
-  const latestNumbers = getNumbers(latestRound, includeBonus);
 
-  // 4) 범위 필터링
+  const selected = sortedLottoCache.find((item) => item.drwNo === end);
+  if (!selected) {
+    return res.status(400).json({
+      success: false,
+      error: "NO_SELECTED_ROUND",
+      message: `회차 ${end} 데이터를 찾을 수 없습니다.`,
+    } satisfies ApiResponse<null>);
+  }
+
+  const selectedNumbers = getNumbers(selected, includeBonus);
+  const selectedRound: SelectedRound = {
+    round: selected.drwNo,
+    numbers: selectedNumbers,
+  };
+
+  // --- 검색 범위 필터 ---
   const records = sortedLottoCache.filter(
     (rec) => rec.drwNo >= start && rec.drwNo <= end
   );
 
-  const similarRounds: AnalysisResult[] = records
-    .filter((item) => {
+  const allResults: InternalResult[] = records
+    .map((item) => {
       const numbers = getNumbers(item, includeBonus);
       const matchCount = numbers.filter((n) =>
-        latestNumbers.includes(n)
+        selectedNumbers.includes(n)
       ).length;
-      return matchCount >= minMatch;
+      const nextItem = sortedLottoCache.find((i) => i.drwNo === item.drwNo + 1);
+      const nextNumbers = nextItem ? getNumbers(nextItem, includeBonus) : [];
+      return {
+        round: item.drwNo,
+        numbers,
+        nextNumbers,
+        matchCount,
+      };
     })
-    .map((item) => ({
-      similarRound: item.drwNo,
-      numbers: getNumbers(item, includeBonus),
-    }))
-    .sort((a, b) => b.similarRound - a.similarRound);
+    .sort((a, b) => b.round - a.round)
+    .filter((r) =>
+      minMatch === 4 ? r.matchCount >= minMatch : r.matchCount === minMatch
+    );
+
+  // --- 검색된 모든 회차의 nextNumbers 합쳐서 빈도 계산 ---
+  const frequency: Record<number, number> = {};
+  allResults.forEach((r) => {
+    r.nextNumbers.forEach((n) => {
+      frequency[n] = (frequency[n] || 0) + 1;
+    });
+  });
+
+  const results = allResults.map((r) => ({
+    round: r.round,
+    numbers: r.numbers,
+    nextNumbers: r.nextNumbers,
+  }));
 
   return res.json({
     success: true,
-    data: similarRounds,
-    message: "최신 회차와 유사한 회차 정보 (회차번호 + 당첨번호)",
-  } satisfies ApiResponse<AnalysisResult[]>);
+    data: {
+      selectedRound,
+      results,
+      nextFrequency: frequency,
+    },
+    message: "검색된 회차 다음 번호 빈도 포함 분석",
+  } satisfies ApiResponse<{
+    selectedRound: SelectedRound;
+    results: AnalysisResult[];
+    nextFrequency: Record<number, number>;
+  }>);
 });
 
 export default router;

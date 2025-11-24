@@ -15,10 +15,9 @@ const getNumbers = (item: LottoNumber) => [
   item.drwtNo6,
 ];
 
-interface AnalysisResult extends LottoNumber {
+interface AnalysisResult {
+  drwNo: number;
   numbers: number[];
-  highlightMost: boolean;
-  highlightLeast: boolean;
 }
 
 // ----------------- 전체 번호 등장횟수 분석 API -----------------
@@ -46,16 +45,11 @@ router.get("/", (req: Request, res: Response) => {
     });
   });
 
-  const mostFreq = Math.max(...Object.values(counts));
-  const leastFreq = Math.min(...Object.values(counts));
-
   const result: AnalysisResult[] = data.map((item) => {
     const nums = getNumbers(item).sort((a, b) => a - b);
     return {
-      ...item,
+      drwNo: item.drwNo,
       numbers: nums,
-      highlightMost: nums.some((n) => counts[n] === mostFreq),
-      highlightLeast: nums.some((n) => counts[n] === leastFreq),
     };
   });
 

@@ -28,61 +28,94 @@ const getNumbers = (item: LottoNumber): number[] => [
 /* -----------------------------------------
  * 공통: reduce 안전 실행 (data.length === 0 방지)
  * ----------------------------------------- */
-const safeReduce = (
-  arr: LottoNumber[],
-  compareFn: (prev: LottoNumber, cur: LottoNumber) => LottoNumber
-): LottoNumber | null => {
-  if (!Array.isArray(arr) || arr.length === 0) return null;
-  return arr.reduce(compareFn);
-};
+// const safeReduce = (
+//   arr: LottoNumber[],
+//   compareFn: (prev: LottoNumber, cur: LottoNumber) => LottoNumber
+// ): LottoNumber | null => {
+//   if (!Array.isArray(arr) || arr.length === 0) return null;
+//   return arr.reduce(compareFn);
+// };
+
+type HandlerReturn = LottoNumber | LottoNumber[] | null;
+type HandlerWithLimit = (data: LottoNumber[], limit?: number) => HandlerReturn;
 
 /* -----------------------------
  * 쿼리 핸들러 정의
  * ----------------------------- */
-const queryHandlers: Record<
-  string,
-  (data: LottoNumber[]) => LottoNumber | null
-> = {
-  maxWin: (data) =>
-    safeReduce(data, (prev, cur) =>
-      toNumber(cur.firstWinamnt) > toNumber(prev.firstWinamnt) ? cur : prev
-    ),
-
-  minWin: (data) => {
-    const filtered = data.filter((item) => toNumber(item.firstPrzwnerCo) > 0);
-    return safeReduce(filtered, (prev, cur) =>
-      toNumber(cur.firstWinamnt) < toNumber(prev.firstWinamnt) ? cur : prev
+const queryHandlers: Record<string, HandlerWithLimit> = {
+  // 1) 상위 당첨금
+  maxWin: (data, limit = 5) => {
+    if (!data || data.length === 0) return null;
+    const sorted = [...data].sort(
+      (a, b) => toNumber(b.firstWinamnt) - toNumber(a.firstWinamnt)
     );
+    return sorted.slice(0, limit);
   },
 
-  maxWinners: (data) =>
-    safeReduce(data, (prev, cur) =>
-      toNumber(cur.firstPrzwnerCo) > toNumber(prev.firstPrzwnerCo) ? cur : prev
-    ),
+  // 2) 최소 당첨금 (1등 수상자가 있는 경우)
+  minWin: (data, limit = 5) => {
+    const filtered = data.filter((item) => toNumber(item.firstPrzwnerCo) > 0);
+    const sorted = [...filtered].sort(
+      (a, b) => toNumber(a.firstWinamnt) - toNumber(b.firstWinamnt)
+    );
+    return sorted.slice(0, limit);
+  },
 
-  maxSell: (data) =>
-    safeReduce(data, (prev, cur) =>
-      toNumber(cur.totSellamnt) > toNumber(prev.totSellamnt) ? cur : prev
-    ),
+  // 3) 최대 당첨자 수
+  maxWinners: (data, limit = 5) => {
+    const sorted = [...data].sort(
+      (a, b) => toNumber(b.firstPrzwnerCo) - toNumber(a.firstPrzwnerCo)
+    );
+    return sorted.slice(0, limit);
+  },
 
-  sumMax: (data) =>
-    safeReduce(data, (prev, cur) => {
-      const prevSum = getNumbers(prev).reduce((a, b) => a + b, 0);
-      const curSum = getNumbers(cur).reduce((a, b) => a + b, 0);
-      return curSum > prevSum ? cur : prev;
-    }),
+  // 4) 최대 판매금액
+  maxSell: (data, limit = 5) => {
+    const sorted = [...data].sort(
+      (a, b) => toNumber(b.totSellamnt) - toNumber(a.totSellamnt)
+    );
+    return sorted.slice(0, limit);
+  },
 
-  sumMin: (data) =>
-    safeReduce(data, (prev, cur) => {
-      const prevSum = getNumbers(prev).reduce((a, b) => a + b, 0);
-      const curSum = getNumbers(cur).reduce((a, b) => a + b, 0);
-      return curSum < prevSum ? cur : prev;
-    }),
+  // 5) 최저 판매금액
+  minSell: (data, limit = 5) => {
+    const sorted = [...data].sort(
+      (a, b) => toNumber(a.totSellamnt) - toNumber(b.totSellamnt)
+    );
+    return sorted.slice(0, limit);
+  },
+
+  // 6) 번호 합 최대
+  sumMax: (data, limit = 5) => {
+    const sorted = [...data].sort((a, b) => {
+      const sumA = getNumbers(a).reduce((x, y) => x + y, 0);
+      const sumB = getNumbers(b).reduce((x, y) => x + y, 0);
+      return sumB - sumA;
+    });
+    return sorted.slice(0, limit);
+  },
+
+  // 7) 번호 합 최소
+  sumMin: (data, limit = 5) => {
+    const sorted = [...data].sort((a, b) => {
+      const sumA = getNumbers(a).reduce((x, y) => x + y, 0);
+      const sumB = getNumbers(b).reduce((x, y) => x + y, 0);
+      return sumA - sumB;
+    });
+    return sorted.slice(0, limit);
+  },
 };
 
-// GET /api/lotto/history?query="maxWin", "minWin", "maxWinners", "maxSell"
+/* -----------------------------
+ * GET /api/lotto/history
+ * ----------------------------- */
 router.get("/", (req: Request, res: Response) => {
   const query = req.query.query as string | undefined;
+  const limit = Number(req.query.limit) || 5;
+  const start = Number(req.query.start) || 1;
+  const end =
+    Number(req.query.end) ||
+    sortedLottoCache[sortedLottoCache.length - 1].drwNo;
 
   // 1) 쿼리 검사
   if (!query) {
@@ -94,15 +127,13 @@ router.get("/", (req: Request, res: Response) => {
   }
 
   // 2) 캐시 검사
-  if (sortedLottoCache.length === 0) {
+  if (!sortedLottoCache || sortedLottoCache.length === 0) {
     return res.json({
       success: true,
       data: [],
       message: "데이터가 없습니다.",
     } satisfies ApiResponse<LottoNumber[]>);
   }
-
-  let data: LottoNumber[] = [...sortedLottoCache];
 
   // 3) 핸들러 찾기
   const handler = queryHandlers[query];
@@ -114,28 +145,32 @@ router.get("/", (req: Request, res: Response) => {
     } satisfies ApiResponse<null>);
   }
 
-  // 4) 실행
-  const result = handler(sortedLottoCache);
-  if (!result) {
-    return res.json({
-      success: true,
-      data: [],
-      message: "결과가 없습니다.",
-    } satisfies ApiResponse<LottoNumber[]>);
-  }
+  const rangedData = sortedLottoCache.filter(
+    (item) => item.drwNo >= start && item.drwNo <= end
+  );
 
-  // 5) 숫자들을 문자열로 재정렬 (일관성 유지)
-  const normalized: LottoNumber = {
-    ...result,
-    firstWinamnt: String(toNumber(result.firstWinamnt)),
-    firstPrzwnerCo: String(toNumber(result.firstPrzwnerCo)),
-    totSellamnt: String(toNumber(result.totSellamnt)),
-    firstAccumamnt: String(toNumber(result.firstAccumamnt)),
-  };
+  // 4) 실행
+  const result = handler(rangedData, limit);
+  let output: LottoNumber[] = [];
+
+  if (Array.isArray(result)) {
+    output = result;
+  } else if (result) {
+    output = [result];
+  } // null이면 빈 배열
+
+  // 5) 숫자 문자열 변환 (일관성)
+  const normalized = output.map((item) => ({
+    ...item,
+    firstWinamnt: String(toNumber(item.firstWinamnt)),
+    firstPrzwnerCo: String(toNumber(item.firstPrzwnerCo)),
+    totSellamnt: String(toNumber(item.totSellamnt)),
+    firstAccumamnt: String(toNumber(item.firstAccumamnt)),
+  }));
 
   return res.json({
     success: true,
-    data: [normalized],
+    data: normalized,
     message: "Cached data",
   } satisfies ApiResponse<LottoNumber[]>);
 });
