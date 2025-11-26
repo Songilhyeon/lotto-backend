@@ -1,7 +1,6 @@
 import { Router, Request, Response } from "express";
-import { LottoNumber } from "../types/lotto";
-import { ApiResponse } from "../types/api";
 import { sortedLottoCache } from "../lib/lottoCache";
+import { LottoNumber } from "../types/lotto";
 
 const router = Router();
 
@@ -20,32 +19,68 @@ interface AnalysisResult {
   numbers: number[];
 }
 
-// ----------------- 전체 번호 등장횟수 분석 API -----------------
-router.get("/", (req: Request, res: Response) => {
-  if (!Array.isArray(sortedLottoCache) || sortedLottoCache.length === 0) {
-    return res.json({
-      success: true,
-      data: [],
-      message: "데이터가 없습니다.",
-    } satisfies ApiResponse<AnalysisResult[]>);
+// GET /api/lotto/statistics?start=900&end=950
+router.get("/", async (req: Request, res: Response) => {
+  const start = Number(req.query.start);
+  let end = Number(req.query.end);
+  const includeBonus = req.query.includeBonus === "true";
+
+  if (!start || !end || start <= 0 || end < start) {
+    return res.status(400).json({
+      success: false,
+      error: "INVALID_RANGE",
+      message: "start/end 값이 잘못되었습니다.",
+    });
   }
 
-  const { limit } = req.query;
-  const n = limit
-    ? Math.min(Math.max(Number(limit), 1), sortedLottoCache.length)
-    : sortedLottoCache.length;
+  const maxRound = sortedLottoCache[sortedLottoCache.length - 1].drwNo;
 
-  const data = sortedLottoCache.slice(-n).reverse(); // 최신 순
+  if (end > maxRound) {
+    end = maxRound;
+  }
 
-  // 번호 등장 횟수 계산 (보너스 제외)
-  const counts: Record<number, number> = {};
-  data.forEach((item) => {
-    getNumbers(item).forEach((num) => {
-      counts[num] = (counts[num] || 0) + 1;
+  // 🔹 start~end 범위 필터링
+  const records = sortedLottoCache.filter(
+    (rec) => rec.drwNo >= start && rec.drwNo <= end
+  );
+
+  if (records.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: "해당 범위 내 로또 정보가 없습니다.",
     });
-  });
+  }
 
-  const result: AnalysisResult[] = data.map((item) => {
+  // 🔹 번호 빈도 계산
+  const frequency: Record<number, number> = {};
+  for (let i = 1; i <= 45; i++) frequency[i] = 0;
+
+  records.forEach((rec) => {
+    // 기본 6개 번호
+    const nums = [
+      rec.drwtNo1,
+      rec.drwtNo2,
+      rec.drwtNo3,
+      rec.drwtNo4,
+      rec.drwtNo5,
+      rec.drwtNo6,
+    ];
+
+    // includeBonus가 true이면 보너스 번호 추가
+    if (includeBonus) nums.push(rec.bnusNo);
+
+    nums.forEach((n) => frequency[n]++);
+  });
+  // OR
+  // 번호 등장 횟수 계산 (보너스 제외)
+  // const counts: Record<number, number> = {};
+  // records.forEach((item) => {
+  //   getNumbers(item).forEach((num) => {
+  //     counts[num] = (counts[num] || 0) + 1;
+  //   });
+  // });
+
+  const roundResults: AnalysisResult[] = records.map((item) => {
     const nums = getNumbers(item).sort((a, b) => a - b);
     return {
       drwNo: item.drwNo,
@@ -55,9 +90,14 @@ router.get("/", (req: Request, res: Response) => {
 
   return res.json({
     success: true,
-    data: result,
-    message: `최근 ${n}회차 분석 데이터`,
-  } satisfies ApiResponse<AnalysisResult[]>);
+    data: {
+      start,
+      end,
+      includeBonus,
+      frequency,
+      roundResults,
+    },
+  });
 });
 
 export default router;

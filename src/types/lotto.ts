@@ -13,3 +13,11 @@ export interface LottoNumber {
   totSellamnt: string;
   firstAccumamnt: string;
 }
+
+export interface MatchResult {
+  round: number;
+  numbers: number[];
+  bonus: number;
+  matchCount: number;
+  nextNumbers: number[];
+}

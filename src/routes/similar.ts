@@ -22,10 +22,6 @@ interface AnalysisResult {
   nextNumbers: number[];
 }
 
-// interface AnalysisResultWithNextFreq {
-//   nextFrequency: Record<number, number>;
-// }
-
 interface SelectedRound {
   numbers: number[];
   round: number;
@@ -94,7 +90,8 @@ router.get("/", (req: Request, res: Response) => {
 
   // --- 검색 범위 필터 ---
   const records = sortedLottoCache.filter(
-    (rec) => rec.drwNo >= start && rec.drwNo <= end
+    (rec) =>
+      rec.drwNo >= start && rec.drwNo <= end && rec.drwNo !== selected.drwNo
   );
 
   const allResults: InternalResult[] = records

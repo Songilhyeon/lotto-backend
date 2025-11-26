@@ -6,9 +6,9 @@ import cors from "cors";
 import lottoGetRoundRouter from "./routes/round";
 import lottoGetRoundsRouter from "./routes/rounds";
 import lottoHistoryRouter from "./routes/history";
-import lottoFrequencyRouter from "./routes/frequency";
 import lottoSimilarRouter from "./routes/similar";
-import lottoStatistics from "./routes/statistics";
+import lottoFrequency from "./routes/frequency";
+import lottoNumberLabRouter from "./routes/number-lab";
 import { getLottoData } from "./lib/lottoCache";
 
 export const app = express();
@@ -30,10 +30,10 @@ app.use(express.json());
 // Lotto API 라우터 등록
 app.use("/api/lotto/round", lottoGetRoundRouter);
 app.use("/api/lotto/rounds", lottoGetRoundsRouter);
-app.use("/api/lotto/statistics", lottoStatistics);
+app.use("/api/lotto/frequency", lottoFrequency);
 app.use("/api/lotto/history", lottoHistoryRouter);
-app.use("/api/lotto/frequency", lottoFrequencyRouter);
 app.use("/api/lotto/similar", lottoSimilarRouter);
+app.use("/api/lotto/numberlab", lottoNumberLabRouter);
 
 // 기본 라우트
 app.get("/", (req: Request, res: Response) => {
