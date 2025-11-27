@@ -128,19 +128,27 @@ router.get("/", (req: Request, res: Response) => {
     nextNumbers: r.nextNumbers,
   }));
 
+  const checkNextRound: LottoNumber | undefined = sortedLottoCache.find(
+    (rec) => selected.drwNo + 1 === rec.drwNo
+  );
+
+  const nextRound = checkNextRound
+    ? {
+        drwNo: checkNextRound.drwNo,
+        numbers: getNumbers(checkNextRound, true),
+      }
+    : null;
+
   return res.json({
     success: true,
     data: {
       selectedRound,
       results,
       nextFrequency: frequency,
+      nextRound,
     },
     message: "검색된 회차 다음 번호 빈도 포함 분석",
-  } satisfies ApiResponse<{
-    selectedRound: SelectedRound;
-    results: AnalysisResult[];
-    nextFrequency: Record<number, number>;
-  }>);
+  });
 });
 
 export default router;

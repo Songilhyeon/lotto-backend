@@ -30,3 +30,46 @@ model LottoNumber {
   firstAccumamnt String // 1등 누적 당첨금액
   createdAt      DateTime @default(now())
 }
+
+model User {
+  id        String   @id @default(cuid())
+  email     String?  @unique
+  name      String?
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          String // 'google' | 'naver' | 'kakao'
+  providerAccountId String // provider 에서 제공하는 유저 고유 id
+  accessToken       String?
+  refreshToken      String?
+  scope             String?
+  tokenType         String?
+  expiresAt         Int? // epoch seconds
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  sessionToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}

@@ -1,6 +1,6 @@
 import { app, prisma } from "./app";
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 
 const server = app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);

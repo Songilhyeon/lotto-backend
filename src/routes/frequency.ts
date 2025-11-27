@@ -5,13 +5,14 @@ import { LottoNumber } from "../types/lotto";
 const router = Router();
 
 // 로또 번호 배열 가져오기
-const getNumbers = (item: LottoNumber) => [
+const getNumbers = (item: LottoNumber, isBonus: boolean) => [
   item.drwtNo1,
   item.drwtNo2,
   item.drwtNo3,
   item.drwtNo4,
   item.drwtNo5,
   item.drwtNo6,
+  ...(isBonus ? [item.bnusNo] : []),
 ];
 
 interface AnalysisResult {
@@ -56,19 +57,8 @@ router.get("/", async (req: Request, res: Response) => {
   for (let i = 1; i <= 45; i++) frequency[i] = 0;
 
   records.forEach((rec) => {
-    // 기본 6개 번호
-    const nums = [
-      rec.drwtNo1,
-      rec.drwtNo2,
-      rec.drwtNo3,
-      rec.drwtNo4,
-      rec.drwtNo5,
-      rec.drwtNo6,
-    ];
-
     // includeBonus가 true이면 보너스 번호 추가
-    if (includeBonus) nums.push(rec.bnusNo);
-
+    const nums = getNumbers(rec, includeBonus);
     nums.forEach((n) => frequency[n]++);
   });
   // OR
@@ -81,12 +71,23 @@ router.get("/", async (req: Request, res: Response) => {
   // });
 
   const roundResults: AnalysisResult[] = records.map((item) => {
-    const nums = getNumbers(item).sort((a, b) => a - b);
+    const nums = getNumbers(item, includeBonus).sort((a, b) => a - b);
     return {
       drwNo: item.drwNo,
       numbers: nums,
     };
   });
+
+  const checkNextRound: LottoNumber | undefined = sortedLottoCache.find(
+    (rec) => rec.drwNo === end + 1
+  );
+
+  const nextRound = checkNextRound
+    ? {
+        drwNo: checkNextRound.drwNo,
+        numbers: getNumbers(checkNextRound, true),
+      }
+    : null;
 
   return res.json({
     success: true,
@@ -96,6 +97,7 @@ router.get("/", async (req: Request, res: Response) => {
       includeBonus,
       frequency,
       roundResults,
+      nextRound,
     },
   });
 });
