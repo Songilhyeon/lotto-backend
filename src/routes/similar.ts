@@ -1,18 +1,18 @@
 import { Router, Request, Response } from "express";
 import { sortedLottoCache } from "../lib/lottoCache";
-import { LottoNumber } from "../types/lotto";
+import { LottoNumber, OptimizedLottoNumber } from "../types/lotto";
 import { ApiResponse } from "../types/api";
 
 const router = Router();
 
-const getNumbers = (item: LottoNumber, includeBonus: boolean) => [
-  item.drwtNo1,
-  item.drwtNo2,
-  item.drwtNo3,
-  item.drwtNo4,
-  item.drwtNo5,
-  item.drwtNo6,
-  ...(includeBonus ? [item.bnusNo] : []),
+const getNumbers = (item: OptimizedLottoNumber, includeBonus: boolean) => [
+  Number(item.drwtNo1),
+  Number(item.drwtNo2),
+  Number(item.drwtNo3),
+  Number(item.drwtNo4),
+  Number(item.drwtNo5),
+  Number(item.drwtNo6),
+  ...(includeBonus ? [Number(item.bnusNo)] : []),
 ];
 
 // --- 타입 ---
@@ -128,7 +128,7 @@ router.get("/", (req: Request, res: Response) => {
     nextNumbers: r.nextNumbers,
   }));
 
-  const checkNextRound: LottoNumber | undefined = sortedLottoCache.find(
+  const checkNextRound: OptimizedLottoNumber | undefined = sortedLottoCache.find(
     (rec) => selected.drwNo + 1 === rec.drwNo
   );
 

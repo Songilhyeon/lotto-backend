@@ -1,18 +1,18 @@
 import { Router, Request, Response } from "express";
 import { sortedLottoCache } from "../lib/lottoCache";
-import { LottoNumber } from "../types/lotto";
+import { LottoNumber, OptimizedLottoNumber } from "../types/lotto";
 
 const router = Router();
 
 // 로또 번호 배열 가져오기
-const getNumbers = (item: LottoNumber, isBonus: boolean) => [
-  item.drwtNo1,
-  item.drwtNo2,
-  item.drwtNo3,
-  item.drwtNo4,
-  item.drwtNo5,
-  item.drwtNo6,
-  ...(isBonus ? [item.bnusNo] : []),
+const getNumbers = (item: OptimizedLottoNumber, isBonus: boolean) => [
+  Number(item.drwtNo1),
+  Number(item.drwtNo2),
+  Number(item.drwtNo3),
+  Number(item.drwtNo4),
+  Number(item.drwtNo5),
+  Number(item.drwtNo6),
+  ...(isBonus ? [Number(item.bnusNo)] : []),
 ];
 
 interface AnalysisResult {
@@ -20,7 +20,7 @@ interface AnalysisResult {
   numbers: number[];
 }
 
-// GET /api/lotto/statistics?start=900&end=950
+// GET /api/lotto/frequency?start=900&end=950
 router.get("/", async (req: Request, res: Response) => {
   const start = Number(req.query.start);
   let end = Number(req.query.end);
@@ -61,14 +61,6 @@ router.get("/", async (req: Request, res: Response) => {
     const nums = getNumbers(rec, includeBonus);
     nums.forEach((n) => frequency[n]++);
   });
-  // OR
-  // 번호 등장 횟수 계산 (보너스 제외)
-  // const counts: Record<number, number> = {};
-  // records.forEach((item) => {
-  //   getNumbers(item).forEach((num) => {
-  //     counts[num] = (counts[num] || 0) + 1;
-  //   });
-  // });
 
   const roundResults: AnalysisResult[] = records.map((item) => {
     const nums = getNumbers(item, includeBonus).sort((a, b) => a - b);
@@ -78,9 +70,8 @@ router.get("/", async (req: Request, res: Response) => {
     };
   });
 
-  const checkNextRound: LottoNumber | undefined = sortedLottoCache.find(
-    (rec) => rec.drwNo === end + 1
-  );
+  const checkNextRound: OptimizedLottoNumber | undefined =
+    sortedLottoCache.find((rec) => rec.drwNo === end + 1);
 
   const nextRound = checkNextRound
     ? {

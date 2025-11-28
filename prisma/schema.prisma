@@ -31,28 +31,47 @@ model LottoNumber {
   createdAt      DateTime @default(now())
 }
 
+// ================================
+// 🔥 User (소셜 로그인용)
+// ================================
 model User {
-  id        String   @id @default(cuid())
-  email     String?  @unique
-  name      String?
-  avatar    String?
+  id     String  @id @default(cuid())
+  email  String? @unique
+  name   String?
+  avatar String?
+
+  role                  UserRole  @default(FREE)
+  subscriptionExpiresAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // 관계
   accounts Account[]
-  sessions Session[]
+  payments Payment[]
+  posts    Post[]
+  comments Comment[]
+  likes    Like[]
 }
 
+enum UserRole {
+  FREE
+  PREMIUM
+}
+
+// ================================
+// 🔥 Account (구글/네이버/카카오 소셜 계정 저장)
+// ================================
 model Account {
   id                String   @id @default(cuid())
   userId            String
   provider          String // 'google' | 'naver' | 'kakao'
-  providerAccountId String // provider 에서 제공하는 유저 고유 id
+  providerAccountId String
   accessToken       String?
   refreshToken      String?
-  scope             String?
   tokenType         String?
-  expiresAt         Int? // epoch seconds
+  scope             String?
+  expiresAt         Int?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -62,14 +81,121 @@ model Account {
   @@index([userId])
 }
 
-model Session {
-  id           String   @id @default(cuid())
-  userId       String
-  sessionToken String   @unique
-  expiresAt    DateTime
-  createdAt    DateTime @default(now())
+// ================================
+// 🔥 Payment (구독 결제 기록)
+// ================================
+model Payment {
+  id        String        @id @default(cuid())
+  userId    String
+  amount    Int
+  status    PaymentStatus
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime      @default(now())
 
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
+}
+
+enum PaymentStatus {
+  success
+  fail
+  pending
+}
+
+// ================================
+// 🔥 Post (게시글)
+// ================================
+model Post {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  // 확장 가능
+  comments       Comment[]
+  likes          Like[]
+  tags           PostTag[]
+  category       PostCategory? @relation(fields: [postCategoryId], references: [id])
+  postCategoryId String?
+
+  @@index([userId])
+}
+
+// ================================
+// 🔥 Comment (게시글 댓글)
+// ================================
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  postId String
+  post   Post   @relation(fields: [postId], references: [id])
+
+  @@index([userId])
+  @@index([postId])
+}
+
+// ================================
+// 🔥 Like (좋아요 기능)
+// ================================
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  post Post @relation(fields: [postId], references: [id])
+
+  @@unique([userId, postId]) // 같은 사용자가 같은 게시글에 여러 번 좋아요 방지
+  @@index([userId])
+  @@index([postId])
+}
+
+// ================================
+// 🔥 PostCategory (게시글 카테고리)
+// ================================
+model PostCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  posts Post[]
+}
+
+// ================================
+// 🔥 PostTag (게시글 태그, N:M 관계)
+// ================================
+model PostTag {
+  postId String
+  tagId  String
+
+  post Post @relation(fields: [postId], references: [id])
+  tag  Tag  @relation(fields: [tagId], references: [id])
+
+  @@id([postId, tagId])
+}
+
+// ================================
+// 🔥 Tag (태그)
+// ================================
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  posts PostTag[]
 }

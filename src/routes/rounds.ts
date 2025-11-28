@@ -61,10 +61,21 @@ router.get("/", async (req: Request, res: Response) => {
     } satisfies ApiResponse<null>);
   }
 
-  // 5) 반환
+  // 5) 반환 (API 호환성을 위해 문자열로 변환)
+  const normalized: LottoNumber[] = records.map((item) => {
+    const { sum, ...rest } = item;
+    return {
+      ...rest,
+      firstWinamnt: String(item.firstWinamnt),
+      firstPrzwnerCo: String(item.firstPrzwnerCo),
+      totSellamnt: String(item.totSellamnt),
+      firstAccumamnt: String(item.firstAccumamnt),
+    };
+  });
+
   return res.json({
     success: true,
-    data: records,
+    data: normalized,
     message: `${start}~${end} 회차 로또 데이터`,
   } satisfies ApiResponse<LottoNumber[]>);
 });

@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { LottoNumber } from "../types/lotto";
 import { ApiResponse } from "../types/api";
 import { prisma } from "../app";
-import { lottoCache, sortedLottoCache } from "../lib/lottoCache";
+import { lottoCache, sortedLottoCache, toOptimized } from "../lib/lottoCache";
 
 const router = Router();
 
@@ -85,7 +85,7 @@ router.get("/:round", async (req: Request, res: Response) => {
     });
 
     lottoCache.set(round, saved);
-    sortedLottoCache.push(saved);
+    sortedLottoCache.push(toOptimized(saved));
     sortedLottoCache.sort((a, b) => a.drwNo - b.drwNo);
 
     return res.json({

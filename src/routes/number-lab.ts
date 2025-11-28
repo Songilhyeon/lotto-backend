@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { LottoNumber, MatchResult } from "../types/lotto";
+import { MatchResult } from "../types/lotto";
 import { sortedLottoCache } from "../lib/lottoCache";
 
 const router = Router();
@@ -68,12 +68,12 @@ router.post("/", (req: Request, res: Response) => {
   for (let i = 0; i < sortedLottoCache.length; i++) {
     const draw = sortedLottoCache[i];
     const drawNumbers = [
-      draw.drwtNo1,
-      draw.drwtNo2,
-      draw.drwtNo3,
-      draw.drwtNo4,
-      draw.drwtNo5,
-      draw.drwtNo6,
+      Number(draw.drwtNo1),
+      Number(draw.drwtNo2),
+      Number(draw.drwtNo3),
+      Number(draw.drwtNo4),
+      Number(draw.drwtNo5),
+      Number(draw.drwtNo6),
     ];
     const drawSet = new Set(drawNumbers);
 
@@ -93,12 +93,12 @@ router.post("/", (req: Request, res: Response) => {
       const nextDraw = sortedLottoCache[i + 1];
       const nextNumbers = nextDraw
         ? [
-            nextDraw.drwtNo1,
-            nextDraw.drwtNo2,
-            nextDraw.drwtNo3,
-            nextDraw.drwtNo4,
-            nextDraw.drwtNo5,
-            nextDraw.drwtNo6,
+            Number(nextDraw.drwtNo1),
+            Number(nextDraw.drwtNo2),
+            Number(nextDraw.drwtNo3),
+            Number(nextDraw.drwtNo4),
+            Number(nextDraw.drwtNo5),
+            Number(nextDraw.drwtNo6),
           ]
         : [];
 

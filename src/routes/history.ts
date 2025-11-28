@@ -1,22 +1,18 @@
 import { Router, Request, Response } from "express";
-import { LottoNumber } from "../types/lotto";
+import { LottoNumber, OptimizedLottoNumber } from "../types/lotto";
 import { ApiResponse } from "../types/api";
 import { sortedLottoCache } from "../lib/lottoCache";
 
 const router = Router();
 
-// 숫자 변환 헬퍼
-// const toNumber = (value: string) => Number(value) || 0;
-/* -----------------------------------
- * 안전한 숫자 변환 (undefined, null, "" 모두 대응)
- * ----------------------------------- */
+// 숫자 변환 헬퍼 (이제 거의 사용 안 함)
 const toNumber = (value: any): number => {
   const num = Number(value);
   return Number.isFinite(num) ? num : 0;
 };
 
 // 번호 배열 추출 헬퍼
-const getNumbers = (item: LottoNumber): number[] => [
+const getNumbers = (item: OptimizedLottoNumber): number[] => [
   toNumber(item.drwtNo1),
   toNumber(item.drwtNo2),
   toNumber(item.drwtNo3),
@@ -25,19 +21,11 @@ const getNumbers = (item: LottoNumber): number[] => [
   toNumber(item.drwtNo6),
 ];
 
-/* -----------------------------------------
- * 공통: reduce 안전 실행 (data.length === 0 방지)
- * ----------------------------------------- */
-// const safeReduce = (
-//   arr: LottoNumber[],
-//   compareFn: (prev: LottoNumber, cur: LottoNumber) => LottoNumber
-// ): LottoNumber | null => {
-//   if (!Array.isArray(arr) || arr.length === 0) return null;
-//   return arr.reduce(compareFn);
-// };
-
-type HandlerReturn = LottoNumber | LottoNumber[] | null;
-type HandlerWithLimit = (data: LottoNumber[], limit?: number) => HandlerReturn;
+type HandlerReturn = OptimizedLottoNumber | OptimizedLottoNumber[] | null;
+type HandlerWithLimit = (
+  data: OptimizedLottoNumber[],
+  limit?: number
+) => HandlerReturn;
 
 /* -----------------------------
  * 쿼리 핸들러 정의
@@ -46,17 +34,17 @@ const queryHandlers: Record<string, HandlerWithLimit> = {
   // 1) 상위 당첨금
   maxWin: (data, limit = 5) => {
     if (!data || data.length === 0) return null;
-    const sorted = [...data].sort(
-      (a, b) => toNumber(b.firstWinamnt) - toNumber(a.firstWinamnt)
-    );
+    // 이미 number 타입이므로 바로 비교
+    const sorted = [...data].sort((a, b) => b.firstWinamnt - a.firstWinamnt);
     return sorted.slice(0, limit);
   },
 
   // 2) 최소 당첨금 (1등 수상자가 있는 경우)
   minWin: (data, limit = 5) => {
-    const filtered = data.filter((item) => toNumber(item.firstPrzwnerCo) > 0);
+    // firstPrzwnerCo도 number이므로 바로 비교
+    const filtered = data.filter((item) => item.firstPrzwnerCo > 0);
     const sorted = [...filtered].sort(
-      (a, b) => toNumber(a.firstWinamnt) - toNumber(b.firstWinamnt)
+      (a, b) => a.firstWinamnt - b.firstWinamnt
     );
     return sorted.slice(0, limit);
   },
@@ -64,44 +52,34 @@ const queryHandlers: Record<string, HandlerWithLimit> = {
   // 3) 최대 당첨자 수
   maxWinners: (data, limit = 5) => {
     const sorted = [...data].sort(
-      (a, b) => toNumber(b.firstPrzwnerCo) - toNumber(a.firstPrzwnerCo)
+      (a, b) => b.firstPrzwnerCo - a.firstPrzwnerCo
     );
     return sorted.slice(0, limit);
   },
 
   // 4) 최대 판매금액
   maxSell: (data, limit = 5) => {
-    const sorted = [...data].sort(
-      (a, b) => toNumber(b.totSellamnt) - toNumber(a.totSellamnt)
-    );
+    const sorted = [...data].sort((a, b) => b.totSellamnt - a.totSellamnt);
     return sorted.slice(0, limit);
   },
 
   // 5) 최저 판매금액
   minSell: (data, limit = 5) => {
-    const sorted = [...data].sort(
-      (a, b) => toNumber(a.totSellamnt) - toNumber(b.totSellamnt)
-    );
+    const sorted = [...data].sort((a, b) => a.totSellamnt - b.totSellamnt);
     return sorted.slice(0, limit);
   },
 
   // 6) 번호 합 최대
   sumMax: (data, limit = 5) => {
-    const sorted = [...data].sort((a, b) => {
-      const sumA = getNumbers(a).reduce((x, y) => x + y, 0);
-      const sumB = getNumbers(b).reduce((x, y) => x + y, 0);
-      return sumB - sumA;
-    });
+    // 미리 계산된 sum 사용
+    const sorted = [...data].sort((a, b) => b.sum - a.sum);
     return sorted.slice(0, limit);
   },
 
   // 7) 번호 합 최소
   sumMin: (data, limit = 5) => {
-    const sorted = [...data].sort((a, b) => {
-      const sumA = getNumbers(a).reduce((x, y) => x + y, 0);
-      const sumB = getNumbers(b).reduce((x, y) => x + y, 0);
-      return sumA - sumB;
-    });
+    // 미리 계산된 sum 사용
+    const sorted = [...data].sort((a, b) => a.sum - b.sum);
     return sorted.slice(0, limit);
   },
 };
@@ -151,7 +129,7 @@ router.get("/", (req: Request, res: Response) => {
 
   // 4) 실행
   const result = handler(rangedData, limit);
-  let output: LottoNumber[] = [];
+  let output: OptimizedLottoNumber[] = [];
 
   if (Array.isArray(result)) {
     output = result;
@@ -159,14 +137,19 @@ router.get("/", (req: Request, res: Response) => {
     output = [result];
   } // null이면 빈 배열
 
-  // 5) 숫자 문자열 변환 (일관성)
-  const normalized = output.map((item) => ({
-    ...item,
-    firstWinamnt: String(toNumber(item.firstWinamnt)),
-    firstPrzwnerCo: String(toNumber(item.firstPrzwnerCo)),
-    totSellamnt: String(toNumber(item.totSellamnt)),
-    firstAccumamnt: String(toNumber(item.firstAccumamnt)),
-  }));
+  // 5) 숫자 문자열 변환 (일관성 유지 - API 계약 준수)
+  // OptimizedLottoNumber -> LottoNumber (string fields)
+  const normalized: LottoNumber[] = output.map((item) => {
+    // sum 등 추가 필드는 제외하고, 원래 LottoNumber 형태로 변환
+    const { sum, ...rest } = item;
+    return {
+      ...rest,
+      firstWinamnt: String(item.firstWinamnt),
+      firstPrzwnerCo: String(item.firstPrzwnerCo),
+      totSellamnt: String(item.totSellamnt),
+      firstAccumamnt: String(item.firstAccumamnt),
+    };
+  });
 
   return res.json({
     success: true,

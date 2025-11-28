@@ -21,3 +21,11 @@ export interface MatchResult {
   matchCount: number;
   nextNumbers: number[];
 }
+
+export interface OptimizedLottoNumber extends Omit<LottoNumber, 'firstPrzwnerCo' | 'firstWinamnt' | 'totSellamnt' | 'firstAccumamnt'> {
+  firstPrzwnerCo: number;
+  firstWinamnt: number;
+  totSellamnt: number;
+  firstAccumamnt: number;
+  sum: number;
+}
