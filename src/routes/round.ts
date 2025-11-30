@@ -64,6 +64,8 @@ router.get("/:round", async (req: Request, res: Response) => {
 
     const apiData = await response.json();
 
+    console.log(apiData);
+
     // ❗ 에러 처리: returnValue 가 fail이면 존재하지 않는 회차
     if (apiData.returnValue !== "success") {
       return res.status(404).json({
@@ -75,8 +77,15 @@ router.get("/:round", async (req: Request, res: Response) => {
 
     const saved = await prisma.lottoNumber.create({
       data: {
-        ...apiData,
+        drwNo: apiData.drwNo,
         drwNoDate: new Date(apiData.drwNoDate),
+        drwtNo1: apiData.drwtNo1,
+        drwtNo2: apiData.drwtNo2,
+        drwtNo3: apiData.drwtNo3,
+        drwtNo4: apiData.drwtNo4,
+        drwtNo5: apiData.drwtNo5,
+        drwtNo6: apiData.drwtNo6,
+        bnusNo: apiData.bnusNo,
         firstPrzwnerCo: apiData.firstPrzwnerCo.toString(),
         firstWinamnt: apiData.firstWinamnt.toString(),
         totSellamnt: apiData.totSellamnt.toString(),
