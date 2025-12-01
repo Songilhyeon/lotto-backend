@@ -3,17 +3,17 @@ dotenv.config(); // .env 파일 로드
 import express, { Request, Response, NextFunction } from "express";
 import { PrismaClient } from "@prisma/client";
 import cors from "cors";
-import lottoGetRoundRouter from "./routes/round.js";
-import lottoGetRoundsRouter from "./routes/rounds.js";
-import lottoHistoryRouter from "./routes/history.js";
-import lottoSimilarRouter from "./routes/similar.js";
-import lottoFrequency from "./routes/frequency.js";
-import lottoNumberLabRouter from "./routes/number-lab.js";
-import { getLottoData } from "./lib/lottoCache.js";
+import lottoGetRoundRouter from "./routes/round";
+import lottoGetRoundsRouter from "./routes/rounds";
+import lottoHistoryRouter from "./routes/history";
+import lottoSimilarRouter from "./routes/similar";
+import lottoFrequency from "./routes/frequency";
+import lottoNumberLabRouter from "./routes/number-lab";
+import { getLottoData } from "./lib/lottoCache";
 import cookieParser from "cookie-parser";
-import authRouter from "./routes/auth.js";
-import lottoPatternRouter from "./routes/pattern.js"; // 테스트 중
-import lottoRangeRouter from "./routes/range.js";
+import authRouter from "./routes/auth";
+import lottoPatternRouter from "./routes/pattern"; // 테스트 중
+import lottoRangeRouter from "./routes/range";
 
 export const app = express();
 export const prisma = new PrismaClient();
