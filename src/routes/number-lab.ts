@@ -25,18 +25,14 @@ router.post("/", (req: Request, res: Response) => {
       .json({ success: false, message: "유효한 번호가 필요합니다." });
   }
 
-  // (A) 다음 회차 번호 빈도
-  const frequencyNext: Record<number, number> = {} as Record<number, number>;
-  for (let i = 1; i <= 45; i++) frequencyNext[i] = 0;
-
-  // (B) 번호 개별 출현 회차 (1..45)
+  // 번호 개별 출현 회차 (1..45)
   const numberAppear: Record<number, number[]> = {} as Record<number, number[]>;
   for (let i = 1; i <= 45; i++) numberAppear[i] = [];
 
-  // (C) 번호 일치 개수별 match 결과 (Map으로 수집)
+  // 번호 일치 개수별 match 결과 (Map으로 수집)
   const grouped = new Map<number, MatchResult[]>();
 
-  // (D) 선택 번호 기반 2~6 조합 미리 생성
+  // 선택 번호 기반 2~6 조합 미리 생성
   const allCombos: Record<number, number[][]> = {};
   const nums = selected;
   for (let k = 2; k <= 6; k++) {
@@ -55,7 +51,7 @@ router.post("/", (req: Request, res: Response) => {
     helper(0, []);
   }
 
-  // (E) 조합 등장 횟수 + 등장 회차 (map 형태)
+  // 조합 등장 횟수 + 등장 회차 (map 형태)
   const comboCount: Record<
     number,
     Record<string, { count: number; rounds: number[] }>
@@ -101,8 +97,6 @@ router.post("/", (req: Request, res: Response) => {
             Number(nextDraw.drwtNo6),
           ]
         : [];
-
-      for (const n of nextNumbers) frequencyNext[n]++;
 
       const matchRes: MatchResult = {
         round: draw.drwNo,
@@ -204,6 +198,61 @@ router.post("/", (req: Request, res: Response) => {
     }
   }
 
+  // ---------------------------------------------
+  // 🔥 일치 개수별 frequencyNextByMatch 계산
+  // ---------------------------------------------
+  const freqByMatch: Record<string, Record<number, number>> = {
+    "1": {},
+    "2": {},
+    "3": {},
+    "4+": {},
+    all: {},
+  };
+
+  // 숫자 초기화
+  for (let i = 1; i <= 45; i++) {
+    freqByMatch["1"][i] = 0;
+    freqByMatch["2"][i] = 0;
+    freqByMatch["3"][i] = 0;
+    freqByMatch["4+"][i] = 0;
+    freqByMatch["all"][i] = 0;
+  }
+
+  // ============================================================
+  //  1,2,3,4개 이상 일치 회착의 다음 번호 출현 빈도 START
+  // ============================================================
+  // groupedResult = {1: [...], 2: [...], ...}
+  for (let k = 1; k <= 6; k++) {
+    const arr = groupedResult[k] ?? [];
+
+    // next 번호만 모아 frequency 증가
+    arr.forEach((item) => {
+      const nums = item.nextNumbers ?? [];
+
+      if (k === 1) {
+        nums.forEach((n) => freqByMatch["1"][n]++);
+      } else if (k === 2) {
+        nums.forEach((n) => freqByMatch["2"][n]++);
+      } else if (k === 3) {
+        nums.forEach((n) => freqByMatch["3"][n]++);
+      } else if (k >= 4) {
+        nums.forEach((n) => freqByMatch["4+"][n]++);
+      }
+    });
+  }
+
+  // 🔥 all = 1,2,3,4+ 합산
+  for (let num = 1; num <= 45; num++) {
+    freqByMatch["all"][num] =
+      freqByMatch["1"][num] +
+      freqByMatch["2"][num] +
+      freqByMatch["3"][num] +
+      freqByMatch["4+"][num];
+  }
+  // ============================================================
+  //  1,2,3,4개 이상 일치 회착의 다음 번호 출현 빈도 END
+  // ============================================================
+
   // -------------------------
   // 응답 (하위 호환성 및 사용 편의성 보장)
   // -------------------------
@@ -220,7 +269,7 @@ router.post("/", (req: Request, res: Response) => {
     // per-number appearances for just selected numbers
     appear: appearSelected,
 
-    frequencyNext,
+    frequencyNext: freqByMatch,
 
     // combos: both a map-like raw structure and a convenient array form for UI
     combosMap: comboCount, // raw map: combosMap[k]["a,b"] = {count, rounds}

@@ -12,7 +12,8 @@ import lottoNumberLabRouter from "./routes/number-lab";
 import { getLottoData } from "./lib/lottoCache";
 import cookieParser from "cookie-parser";
 import authRouter from "./routes/auth";
-import lottoPatternRouter from "./routes/pattern";
+import lottoPatternRouter from "./routes/pattern"; // 테스트 중
+import lottoRangeRouter from "./routes/range";
 
 export const app = express();
 export const prisma = new PrismaClient();
@@ -39,6 +40,7 @@ app.use("/api/lotto/rounds", lottoGetRoundsRouter);
 app.use("/api/lotto/frequency", lottoFrequency);
 app.use("/api/lotto/history", lottoHistoryRouter);
 app.use("/api/lotto/similar", lottoSimilarRouter);
+app.use("/api/lotto/range", lottoRangeRouter);
 app.use("/api/lotto/numberlab", lottoNumberLabRouter);
 
 // 기본 라우트
