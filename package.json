@@ -1,6 +1,7 @@
 {
   "name": "lotto-backend",
   "version": "1.0.0",
+  "type": "module",      // ← 여기 추가
   "description": "",
   "main": "index.js",
   "scripts": {

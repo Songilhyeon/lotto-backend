@@ -31,6 +31,8 @@ export async function getLottoData() {
     lottoCache.set(record.drwNo, record);
   });
 
+  console.log(`DB에서 ${records.length}개 로또 회차 조회`);
+
   sortedLottoCache = Array.from(lottoCache.values())
     .map(toOptimized)
     .sort((a, b) => a.drwNo - b.drwNo);
