@@ -25,7 +25,11 @@ export const prisma = new PrismaClient();
 // CORS 미들웨어 등록
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // 허용할 프런트 URL
+    origin: [
+      "http://localhost:3000", // 로컬 개발
+      "https://lotto-data-lab.vercel.app/", // Vercel 프런트
+    ],
+
     credentials: true, // 쿠키 전달 허용
   })
 );

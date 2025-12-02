@@ -106,29 +106,24 @@ router.post("/logout", (req, res) => {
  */
 router.get("/callback/:provider", async (req: AuthRequest, res) => {
   const provider = req.params.provider as Provider;
-  const { code } = req.query;
+  const { code, state } = req.query;
 
   if (!code || typeof code !== "string")
     return res.status(400).send("Code is missing");
 
   try {
-    // 1) 토큰 교환 → 프로필 가져오기
-    const tokenRes = await exchangeCodeForToken(provider, code as string);
+    // 1) 토큰 교환 + 프로필 가져오기
+    const tokenRes = await exchangeCodeForToken(provider, code);
     const profile = await getProfile(provider, tokenRes.access_token);
     const normalized = normalizeProfile(profile);
 
-    // 2) 유저 생성 or 조회
-    // if (!normalized.email) {
-    //   return res.status(400).send("Email is required for login");
-    // }
-    // 2) 이메일 없으면 임시 이메일 생성 (kakao 등 제한된 제공)
+    // 이메일 없으면 임시 생성
     const userEmail =
       normalized.email || `${provider}-${normalized.id}@${provider}-temp.local`;
 
-    if (!normalized.email) {
-      normalized.email = userEmail;
-    }
+    if (!normalized.email) normalized.email = userEmail;
 
+    // 2) User upsert
     let user = await prisma.user.upsert({
       where: { email: normalized.email! },
       update: { name: normalized.name, avatar: normalized.avatar ?? null },
@@ -139,7 +134,7 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
       },
     });
 
-    // 3) Account 저장
+    // 3) Account upsert
     await prisma.account.upsert({
       where: {
         provider_providerAccountId: {
@@ -147,9 +142,7 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
           providerAccountId: normalized.id,
         },
       },
-      update: {
-        accessToken: tokenRes.access_token,
-      },
+      update: { accessToken: tokenRes.access_token },
       create: {
         provider,
         providerAccountId: normalized.id,
@@ -158,7 +151,7 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
       },
     });
 
-    // 4) JWT 발급 (role 포함)
+    // 4) JWT 발급
     const jwtToken = jwt.sign(
       {
         id: user.id,
@@ -178,7 +171,12 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
       sameSite: "lax",
     });
 
-    res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}`); // 프런트로 리다이렉트
+    // ⭐⭐ redirectUrl 은 state 로 전달됨 (Origin 안 씀)
+    const redirectUrl = decodeURIComponent(
+      (state as string) || "http://localhost:3000"
+    );
+
+    return res.redirect(redirectUrl);
   } catch (err) {
     console.error(err);
     res.status(500).send("OAuth callback error");
@@ -191,24 +189,47 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
  */
 router.get("/:provider", (req, res) => {
   const provider = req.params.provider as Provider;
+
+  // ⭐ 프런트에서 전달한 state (= redirectUrl)
+  const state = typeof req.query.state === "string" ? req.query.state : "";
+
   let url = "";
 
   switch (provider) {
     case "google":
-      url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&response_type=code&scope=openid email profile`;
+      url =
+        `https://accounts.google.com/o/oauth2/v2/auth` +
+        `?client_id=${process.env.GOOGLE_CLIENT_ID}` +
+        `&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}` +
+        `&response_type=code` +
+        `&scope=openid email profile` +
+        `&state=${state}`; // ⭐ redirectUrl 전달
       break;
+
     case "naver":
       const redirect = encodeURIComponent(process.env.NAVER_REDIRECT_URI!);
-      url = `https://nid.naver.com/oauth2.0/authorize?client_id=${
-        process.env.NAVER_CLIENT_ID
-      }&redirect_uri=${redirect}&response_type=code&state=${crypto.randomUUID()}`;
+      url =
+        `https://nid.naver.com/oauth2.0/authorize` +
+        `?client_id=${process.env.NAVER_CLIENT_ID}` +
+        `&redirect_uri=${redirect}` +
+        `&response_type=code` +
+        `&state=${state}`; // ⭐ redirectUrl 전달
       break;
+
     case "kakao":
-      url = `https://kauth.kakao.com/oauth/authorize?client_id=${process.env.KAKAO_CLIENT_ID}&redirect_uri=${process.env.KAKAO_REDIRECT_URI}&response_type=code`;
+      url =
+        `https://kauth.kakao.com/oauth/authorize` +
+        `?client_id=${process.env.KAKAO_CLIENT_ID}` +
+        `&redirect_uri=${process.env.KAKAO_REDIRECT_URI}` +
+        `&response_type=code` +
+        `&state=${state}`; // ⭐ redirectUrl 전달
       break;
+
     default:
       return res.status(400).send("Unknown provider");
   }
+
+  console.log("OAuth start:", provider, "→", url);
 
   res.redirect(url);
 });
