@@ -18,9 +18,9 @@ import lottoRangeRouter from "./routes/range";
 export const app = express();
 export const prisma = new PrismaClient();
 
-(async () => {
-  await getLottoData();
-})();
+// (async () => {
+//   await getLottoData();
+// })();
 
 // CORS 미들웨어 등록
 app.use(
