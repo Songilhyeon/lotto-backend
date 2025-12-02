@@ -118,8 +118,15 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
     const normalized = normalizeProfile(profile);
 
     // 2) 유저 생성 or 조회
+    // if (!normalized.email) {
+    //   return res.status(400).send("Email is required for login");
+    // }
+    // 2) 이메일 없으면 임시 이메일 생성 (kakao 등 제한된 제공)
+    const userEmail =
+      normalized.email || `${provider}-${normalized.id}@${provider}-temp.local`;
+
     if (!normalized.email) {
-      return res.status(400).send("Email is required for login");
+      normalized.email = userEmail;
     }
 
     let user = await prisma.user.upsert({
@@ -171,7 +178,7 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
       sameSite: "lax",
     });
 
-    res.redirect("http://localhost:3000"); // 프런트로 리다이렉트
+    res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}`); // 프런트로 리다이렉트
   } catch (err) {
     console.error(err);
     res.status(500).send("OAuth callback error");
@@ -191,7 +198,10 @@ router.get("/:provider", (req, res) => {
       url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&response_type=code&scope=openid email profile`;
       break;
     case "naver":
-      url = `https://nid.naver.com/oauth2.0/authorize?client_id=${process.env.NAVER_CLIENT_ID}&redirect_uri=${process.env.NAVER_REDIRECT_URI}&response_type=code&state=STATE_STRING`;
+      const redirect = encodeURIComponent(process.env.NAVER_REDIRECT_URI!);
+      url = `https://nid.naver.com/oauth2.0/authorize?client_id=${
+        process.env.NAVER_CLIENT_ID
+      }&redirect_uri=${redirect}&response_type=code&state=${crypto.randomUUID()}`;
       break;
     case "kakao":
       url = `https://kauth.kakao.com/oauth/authorize?client_id=${process.env.KAKAO_CLIENT_ID}&redirect_uri=${process.env.KAKAO_REDIRECT_URI}&response_type=code`;

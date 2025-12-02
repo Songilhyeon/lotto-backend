@@ -64,8 +64,6 @@ router.get("/:round", async (req: Request, res: Response) => {
 
     const apiData = await response.json();
 
-    console.log(apiData);
-
     // ❗ 에러 처리: returnValue 가 fail이면 존재하지 않는 회차
     if (apiData.returnValue !== "success") {
       return res.status(404).json({
