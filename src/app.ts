@@ -27,7 +27,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:3000", // 로컬 개발
-      "https://lotto-data-lab.vercel.app/", // Vercel 프런트
+      "https://lotto-data-lab.vercel.app", // Vercel 프런트
     ],
 
     credentials: true, // 쿠키 전달 허용
