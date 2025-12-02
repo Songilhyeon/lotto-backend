@@ -1,9 +1,15 @@
 import { app, prisma } from "./app";
+import { getLottoData } from "./lib/lottoCache";
 
 const PORT = process.env.PORT || 4000;
 
 const server = app.listen(PORT, async () => {
-  console.log(`Server is running on port ${PORT}`);
+  try {
+    console.log(`Server is running on port ${PORT}`);
+    await getLottoData(); // 캐싱
+  } catch (err) {
+    console.error("Lotto caching failed:", err);
+  }
 });
 
 // 프로세스 종료 시 Prisma 연결 해제
