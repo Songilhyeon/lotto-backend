@@ -3,8 +3,7 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../app";
 import { exchangeCodeForToken, getProfile, Provider } from "../utils/oauth";
 import { normalizeProfile } from "../utils/normalizeProfile";
-import { AuthRequest } from "../middlewares/authMiddleware";
-import { auth } from "../middlewares/authMiddleware";
+import { AuthRequest, auth } from "../middlewares/authMiddleware";
 
 const router = Router();
 
@@ -58,12 +57,14 @@ router.post("/test-login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
+    const isProd = process.env.NODE_ENV === "production";
+
     // 4) 쿠키 세팅
     res.cookie("token", jwtToken, {
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      secure: process.env.COOKIE_SECURE === "true",
-      sameSite: "lax",
+      secure: isProd, // 프로덕션(HTTPS)만 true
+      sameSite: isProd ? "none" : "lax", // 로컬 HTTP는 lax
     });
 
     res.json({ ok: true, user });
@@ -165,11 +166,14 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
       { expiresIn: "7d" }
     );
 
+    const isProd = process.env.NODE_ENV === "production";
+
+    // 4) 쿠키 세팅
     res.cookie("token", jwtToken, {
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      secure: process.env.COOKIE_SECURE === "true",
-      sameSite: "lax",
+      secure: isProd, // 프로덕션(HTTPS)만 true
+      sameSite: isProd ? "none" : "lax", // 로컬 HTTP는 lax
     });
 
     // ⭐⭐ redirectUrl 은 state 로 전달됨 (Origin 안 씀)

@@ -51,10 +51,14 @@ router.post("/payment/complete", auth, async (req: AuthRequest, res) => {
     { expiresIn: "7d" }
   );
 
+  const isProd = process.env.NODE_ENV === "production";
+
+  // 4) 쿠키 세팅
   res.cookie("token", newToken, {
     httpOnly: true,
-    sameSite: "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000,
+    secure: isProd, // 프로덕션(HTTPS)만 true
+    sameSite: isProd ? "none" : "lax", // 로컬 HTTP는 lax
   });
 
   res.json({ ok: true, role: "PREMIUM" });
