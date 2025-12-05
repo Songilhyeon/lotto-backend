@@ -179,8 +179,6 @@ export async function analyzePremiumRound(
   const recentRounds = roundsSorted.slice(start, selectedIndex + 1);
   const recentFreq = initFreq();
 
-  console.log(start, selectedIndex, " : ", recentRounds);
-
   recentRounds.forEach((r) => {
     const nums = bonusIncluded ? [...r.numbers, r.bonus] : r.numbers;
     nums.forEach((n) => recentFreq[n]++);
@@ -209,8 +207,6 @@ export async function analyzePremiumRound(
     nextRound,
     generatedAt: new Date().toISOString(),
   };
-
-  console.log(result);
 
   await redisSet(cacheKey, result, 6 * 60 * 60); // TTL 6시간
   return result;
