@@ -128,14 +128,14 @@ router.get("/", (req: Request, res: Response) => {
     nextNumbers: r.nextNumbers,
   }));
 
-  const checkNextRound: OptimizedLottoNumber | undefined = sortedLottoCache.find(
-    (rec) => selected.drwNo + 1 === rec.drwNo
-  );
+  const checkNextRound: OptimizedLottoNumber | undefined =
+    sortedLottoCache.find((rec) => selected.drwNo + 1 === rec.drwNo);
 
   const nextRound = checkNextRound
     ? {
-        drwNo: checkNextRound.drwNo,
-        numbers: getNumbers(checkNextRound, true),
+        round: checkNextRound.drwNo,
+        numbers: getNumbers(checkNextRound, false),
+        bonus: checkNextRound.bnusNo,
       }
     : null;
 

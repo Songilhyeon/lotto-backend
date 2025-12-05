@@ -20,6 +20,12 @@ interface AnalysisResult {
   numbers: number[];
 }
 
+interface NextRound {
+  round: number;
+  numbers: number[];
+  bonus?: number;
+}
+
 // GET /api/lotto/frequency?start=900&end=950
 router.get("/", async (req: Request, res: Response) => {
   const start = Number(req.query.start);
@@ -73,10 +79,11 @@ router.get("/", async (req: Request, res: Response) => {
   const checkNextRound: OptimizedLottoNumber | undefined =
     sortedLottoCache.find((rec) => rec.drwNo === end + 1);
 
-  const nextRound = checkNextRound
+  const nextRound: NextRound | null = checkNextRound
     ? {
-        drwNo: checkNextRound.drwNo,
-        numbers: getNumbers(checkNextRound, true),
+        round: checkNextRound.drwNo,
+        numbers: getNumbers(checkNextRound, false),
+        bonus: Number(checkNextRound.bnusNo),
       }
     : null;
 

@@ -22,7 +22,7 @@ interface RangeResult {
 /** API 응답 구조 */
 interface ApiData {
   selectedRound: { round: number; numbers: number[] };
-  nextRound: { round: number; numbers: number[] } | null;
+  nextRound: { round: number; numbers: number[]; bonus: number } | null;
   ranges: { "10": RangeResult; "7": RangeResult };
 }
 
@@ -139,7 +139,8 @@ router.get("/", (req: Request, res: Response) => {
   const nextRound = next
     ? {
         round: next.drwNo,
-        numbers: getNumbers(next, includeBonus),
+        numbers: getNumbers(next, false),
+        bonus: next.bnusNo,
       }
     : null; // 마지막 회차면 null
 
