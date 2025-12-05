@@ -94,10 +94,12 @@ router.get("/me", auth, (req: AuthRequest, res) => {
 
 // routes/auth.ts
 router.post("/logout", (req, res) => {
+  const isProd = process.env.NODE_ENV === "production";
+
   res.clearCookie("token", {
     httpOnly: true,
-    secure: process.env.COOKIE_SECURE === "true",
-    sameSite: "lax",
+    secure: isProd, // 프로덕션(HTTPS)만 true
+    sameSite: isProd ? "none" : "lax", // 로컬 HTTP는 lax
   });
   res.json({ message: "Logged out" });
 });
