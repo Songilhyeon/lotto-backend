@@ -2,7 +2,6 @@
 import {
   getPremiumRound,
   getPremiumRounds,
-  getPremiumLatestRound,
   redisGet,
   redisSet,
   PremiumLottoRecord,
@@ -65,23 +64,32 @@ export function patternKey(buckets: number[]): string {
 export async function analyzePremiumRound(
   round: number,
   bonusIncluded = false,
-  recentCount = 20
+  recentCount = 10 // ★ 기본값 10으로 설정
 ): Promise<PremiumAnalysisResult> {
   const cacheKey = `premium:analysis:${round}:bonus:${
     bonusIncluded ? 1 : 0
   }:recent:${recentCount}`;
   const cached = await redisGet<PremiumAnalysisResult>(cacheKey);
-
   if (cached) return cached;
 
-  const roundObj = getPremiumRound(round);
-  if (!roundObj) throw new Error(`Round ${round} not found`);
+  const baseRoundObj = getPremiumRound(round);
+  if (!baseRoundObj) throw new Error(`Round ${round} not found`);
 
-  const latestRound = getPremiumLatestRound();
+  // 보호: 원본 데이터 손상 방지
+  const roundObj = {
+    ...baseRoundObj,
+    numbers: [...baseRoundObj.numbers],
+  };
+  if (bonusIncluded) {
+    roundObj.numbers = [...roundObj.numbers, roundObj.bonus];
+  }
+
+  // 🔥 핵심: 분석 범위는 항상 "1~round"
+  const latestRound = round;
   const roundsSorted = getPremiumRounds(1, latestRound);
 
   // ------------------------------
-  // 유틸: 1~45 초기화된 frequency 객체 생성
+  // 유틸 freq 초기화
   // ------------------------------
   const initFreq = (): Record<number, number> => {
     const freq: Record<number, number> = {};
@@ -90,24 +98,28 @@ export async function analyzePremiumRound(
   };
 
   // ------------------------------
-  // 1) per-number 다음 회차 빈도
+  // 1) 번호별 다음 회차 빈도
   // ------------------------------
   const numToRounds: Record<number, PremiumLottoRecord[]> = {};
   for (let n = 1; n <= 45; n++) numToRounds[n] = [];
+
   for (const r of roundsSorted) {
     const nums = bonusIncluded ? [...r.numbers, r.bonus] : r.numbers;
     nums.forEach((num) => numToRounds[num].push(r));
   }
 
   const perNumberNextFreq: Record<number, Record<number, number>> = {};
+
   for (const num of roundObj.numbers) {
     const freq = initFreq();
     for (const r of numToRounds[num]) {
       const nextRound = getPremiumRound(r.drwNo + 1);
       if (!nextRound) continue;
+
       const nextNums = bonusIncluded
         ? [...nextRound.numbers, nextRound.bonus]
         : nextRound.numbers;
+
       nextNums.forEach((n) => freq[n]++);
     }
     perNumberNextFreq[num] = freq;
@@ -117,6 +129,7 @@ export async function analyzePremiumRound(
   // 2) K-match 분석
   // ------------------------------
   const targetMask = numbersToBitmask(roundObj.numbers);
+
   const kMatchNextFreq: Record<string, Record<number, number>> = {
     "1": initFreq(),
     "2": initFreq(),
@@ -127,8 +140,10 @@ export async function analyzePremiumRound(
   for (const r of roundsSorted) {
     const mask = numbersToBitmask(r.numbers);
     const inter = intersectionCount(targetMask, mask);
+
     const nextRound = getPremiumRound(r.drwNo + 1);
     if (!nextRound) continue;
+
     const nextNums = bonusIncluded
       ? [...nextRound.numbers, nextRound.bonus]
       : nextRound.numbers;
@@ -138,16 +153,16 @@ export async function analyzePremiumRound(
     else if (inter === 3) key = "3";
     else if (inter === 2) key = "2";
     else if (inter === 1) key = "1";
+
     if (!key) continue;
 
     nextNums.forEach((n) => kMatchNextFreq[key][n]++);
   }
 
   // ------------------------------
-  // 3) 패턴 기반 분석 (10 단위, 7 단위)
+  // 3) 패턴 기반 분석 (10단위 / 7단위)
   // ------------------------------
   function computePatternNext(unitSize: number): PatternNextFreq {
-    if (!roundObj) throw new Error(`Round ${round} not found`);
     const buckets = patternBuckets(roundObj.numbers, unitSize);
     const key = patternKey(buckets);
     const freq = initFreq();
@@ -155,11 +170,14 @@ export async function analyzePremiumRound(
     for (const r of roundsSorted) {
       const rBuckets = patternBuckets(r.numbers, unitSize);
       if (patternKey(rBuckets) !== key) continue;
+
       const nextRound = getPremiumRound(r.drwNo + 1);
       if (!nextRound) continue;
+
       const nextNums = bonusIncluded
         ? [...nextRound.numbers, nextRound.bonus]
         : nextRound.numbers;
+
       nextNums.forEach((n) => freq[n]++);
     }
 
@@ -175,21 +193,24 @@ export async function analyzePremiumRound(
   const selectedIndex = roundsSorted.findIndex((r) => r.drwNo === round);
   if (selectedIndex === -1) throw new Error("선택한 회차 없음");
 
-  const start = Math.max(0, selectedIndex - recentCount) + 1;
-  const recentRounds = roundsSorted.slice(start, selectedIndex + 1);
-  const recentFreq = initFreq();
+  const startIdx = Math.max(0, selectedIndex - recentCount) + 1;
+  const recentRounds = roundsSorted.slice(startIdx, selectedIndex + 1);
 
+  const recentFreq = initFreq();
   recentRounds.forEach((r) => {
     const nums = bonusIncluded ? [...r.numbers, r.bonus] : r.numbers;
     nums.forEach((n) => recentFreq[n]++);
   });
 
-  const checkNextRound = roundsSorted.find((rec) => rec.drwNo === round + 1);
-  const nextRound = checkNextRound
+  // ------------------------------
+  // 5) 다음 회차 정보
+  // ------------------------------
+  const nextRoundData = getPremiumRound(round + 1);
+  const nextRound = nextRoundData
     ? {
-        round: checkNextRound.drwNo,
-        numbers: checkNextRound.numbers,
-        bonus: bonusIncluded ? checkNextRound.bonus : null,
+        round: nextRoundData.drwNo,
+        numbers: nextRoundData.numbers,
+        bonus: bonusIncluded ? nextRoundData.bonus : null,
       }
     : null;
 
@@ -208,6 +229,6 @@ export async function analyzePremiumRound(
     generatedAt: new Date().toISOString(),
   };
 
-  await redisSet(cacheKey, result, 6 * 60 * 60); // TTL 6시간
+  await redisSet(cacheKey, result, 6 * 60 * 60);
   return result;
 }

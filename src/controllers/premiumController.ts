@@ -1,11 +1,10 @@
 // premiumController.ts
 import { Request, Response } from "express";
-import { getRedis } from "../lib/redis"; // 경로는 실제 위치에 맞게
 import {
   analyzePremiumRound,
   PremiumAnalysisResult,
 } from "../lib/lottoAnalyzer";
-import { initializePremiumCache } from "../lib/premiumCache";
+import { initializePremiumCache, redis } from "../lib/premiumCache";
 
 // ------------------------------
 // 프리미엄 분석 API
@@ -19,14 +18,14 @@ export async function getPremiumAnalysis(req: Request, res: Response) {
         .json({ ok: false, error: "round required and must be >= 1" });
     }
 
-    const includeBonus =
-      req.query.includeBonus === "true" || req.query.includeBonus === "1";
-    const recentCount = Number(req.query.recent) || 20; // 기본 최근 20회
+    const bonusIncluded =
+      req.query.bonusIncluded === "true" || req.query.bonusIncluded === "1";
+    const recentCount = Number(req.query.recent) || 10; // 기본 최근 10회
 
     // 실제 분석 호출
     const result: PremiumAnalysisResult = await analyzePremiumRound(
       round,
-      includeBonus,
+      bonusIncluded,
       recentCount
     );
 
@@ -55,7 +54,7 @@ export async function getPremiumAnalysis(req: Request, res: Response) {
 // ------------------------------
 export async function rebuildPremiumCache(req: Request, res: Response) {
   try {
-    await getRedis().flushdb(); // 또는 분석용 key만 삭제
+    await redis.flushdb();
     initializePremiumCache();
     res.json({ ok: true, message: "Premium cache rebuilt" });
   } catch (err: any) {
