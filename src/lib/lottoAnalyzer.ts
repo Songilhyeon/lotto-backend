@@ -1,234 +1,214 @@
-// lottoAnalyzer.ts
+// lottoAnalyzer.ts (Bitmask 최적화 + 정확한 패턴 기반 다음 회차)
 import {
   getPremiumRound,
-  getPremiumRounds,
-  redisGet,
-  redisSet,
-  PremiumLottoRecord,
+  getPremiumLatestRound,
+  getPremiumRange,
 } from "./premiumCache";
-
-export interface PatternNextFreq {
-  patternKey: string;
-  freq: Record<number, number>;
-}
 
 export interface PremiumAnalysisResult {
   round: number;
   bonusIncluded: boolean;
-  perNumberNextFreq: Record<number, Record<number, number>>;
-  kMatchNextFreq: Record<string, Record<number, number>>;
-  pattern10NextFreq: PatternNextFreq;
-  pattern7NextFreq: PatternNextFreq;
+  perNumberNextFreq: Record<number, Record<number, number>>; // 번호별 다음 회차 빈도
+  kMatchNextFreq: Record<"1" | "2" | "3" | "4+", Record<number, number>>;
+  pattern10NextFreq: Record<number, number>;
+  pattern7NextFreq: Record<number, number>;
   recentFreq: Record<number, number>;
-  nextRound: {
-    round: number;
-    numbers: number[];
-    bonus: number | null;
-  } | null;
+  nextRound: number[] | null;
   generatedAt: string;
 }
 
-// ------------------------------
-// 유틸
-// ------------------------------
-export function numbersToBitmask(numbers: number[]): bigint {
-  let mask = 0n;
-  for (const n of numbers) mask |= 1n << BigInt(n - 1);
-  return mask;
-}
-
-export function intersectionCount(a: bigint, b: bigint): number {
-  let x = a & b;
-  let count = 0;
+// ----------------------------------
+// Bitmask popcount
+// ----------------------------------
+function popcount(x: bigint): number {
+  let c = 0n;
   while (x) {
-    if (x & 1n) count++;
-    x >>= 1n;
+    x &= x - 1n;
+    c++;
   }
-  return count;
+  return Number(c);
 }
 
-export function patternBuckets(numbers: number[], unitSize: number): number[] {
-  const bucketCount = Math.ceil(45 / unitSize);
-  const buckets = Array(bucketCount).fill(0);
-  for (const n of numbers) buckets[Math.floor((n - 1) / unitSize)]++;
+function inter(a: bigint, b: bigint): number {
+  return popcount(a & b);
+}
+
+// ----------------------------------
+// 배열 → Record 변환
+// ----------------------------------
+function arrToRecord(arr: number[]): Record<number, number> {
+  const obj: Record<number, number> = {};
+  for (let i = 1; i <= 45; i++) obj[i] = arr[i] ?? 0;
+  return obj;
+}
+
+// ----------------------------------
+// 숫자 배열을 단위(unitSize)별로 버킷으로 나누기
+// 예: unitSize=10, [1,3,12,22] → [1,1,1,0,0,...] 등
+// ----------------------------------
+function patternBuckets(numbers: number[], unitSize: number): number[] {
+  const buckets = Array(Math.ceil(45 / unitSize)).fill(0);
+  for (const n of numbers) {
+    const idx = Math.floor((n - 1) / unitSize);
+    buckets[idx]++;
+  }
   return buckets;
 }
 
-export function patternKey(buckets: number[]): string {
+// ----------------------------------
+// 버킷 배열을 문자열 키로 변환 (패턴 비교용)
+// ----------------------------------
+function patternKey(buckets: number[]): string {
   return buckets.join("-");
 }
 
-// ------------------------------
-// Premium 분석 (프론트 옵션 포함)
-// ------------------------------
-export async function analyzePremiumRound(
-  round: number,
-  bonusIncluded = false,
-  recentCount = 10 // ★ 기본값 10으로 설정
-): Promise<PremiumAnalysisResult> {
-  const cacheKey = `premium:analysis:${round}:bonus:${
-    bonusIncluded ? 1 : 0
-  }:recent:${recentCount}`;
-  const cached = await redisGet<PremiumAnalysisResult>(cacheKey);
-  if (cached) return cached;
+// ----------------------------------
+// 패턴 다음 회차 빈도 계산
+// ----------------------------------
+function computePatternNext(
+  unitSize: number,
+  rounds: ReturnType<typeof getPremiumRange>,
+  targetNumbers: number[],
+  bonusIncluded: boolean
+): number[] {
+  const freq = Array(46).fill(0);
+  const keyBuckets = patternBuckets(targetNumbers, unitSize);
+  const key = patternKey(keyBuckets);
 
-  const baseRoundObj = getPremiumRound(round);
-  if (!baseRoundObj) throw new Error(`Round ${round} not found`);
-
-  // 보호: 원본 데이터 손상 방지
-  const roundObj = {
-    ...baseRoundObj,
-    numbers: [...baseRoundObj.numbers],
-  };
-  if (bonusIncluded) {
-    roundObj.numbers = [...roundObj.numbers, roundObj.bonus];
-  }
-
-  // 🔥 핵심: 분석 범위는 항상 "1~round"
-  const latestRound = round;
-  const roundsSorted = getPremiumRounds(1, latestRound);
-
-  // ------------------------------
-  // 유틸 freq 초기화
-  // ------------------------------
-  const initFreq = (): Record<number, number> => {
-    const freq: Record<number, number> = {};
-    for (let i = 1; i <= 45; i++) freq[i] = 0;
-    return freq;
-  };
-
-  // ------------------------------
-  // 1) 번호별 다음 회차 빈도
-  // ------------------------------
-  const numToRounds: Record<number, PremiumLottoRecord[]> = {};
-  for (let n = 1; n <= 45; n++) numToRounds[n] = [];
-
-  for (const r of roundsSorted) {
-    const nums = bonusIncluded ? [...r.numbers, r.bonus] : r.numbers;
-    nums.forEach((num) => numToRounds[num].push(r));
-  }
-
-  const perNumberNextFreq: Record<number, Record<number, number>> = {};
-
-  for (const num of roundObj.numbers) {
-    const freq = initFreq();
-    for (const r of numToRounds[num]) {
-      const nextRound = getPremiumRound(r.drwNo + 1);
-      if (!nextRound) continue;
-
-      const nextNums = bonusIncluded
-        ? [...nextRound.numbers, nextRound.bonus]
-        : nextRound.numbers;
-
-      nextNums.forEach((n) => freq[n]++);
-    }
-    perNumberNextFreq[num] = freq;
-  }
-
-  // ------------------------------
-  // 2) K-match 분석
-  // ------------------------------
-  const targetMask = numbersToBitmask(roundObj.numbers);
-
-  const kMatchNextFreq: Record<string, Record<number, number>> = {
-    "1": initFreq(),
-    "2": initFreq(),
-    "3": initFreq(),
-    "4+": initFreq(),
-  };
-
-  for (const r of roundsSorted) {
-    const mask = numbersToBitmask(r.numbers);
-    const inter = intersectionCount(targetMask, mask);
+  for (const r of rounds) {
+    const rBuckets = patternBuckets(r.numbers, unitSize);
+    if (patternKey(rBuckets) !== key) continue;
 
     const nextRound = getPremiumRound(r.drwNo + 1);
     if (!nextRound) continue;
 
-    const nextNums = bonusIncluded
-      ? [...nextRound.numbers, nextRound.bonus]
-      : nextRound.numbers;
-
-    let key: string | null = null;
-    if (inter >= 4) key = "4+";
-    else if (inter === 3) key = "3";
-    else if (inter === 2) key = "2";
-    else if (inter === 1) key = "1";
-
-    if (!key) continue;
-
-    nextNums.forEach((n) => kMatchNextFreq[key][n]++);
+    const nextMask = bonusIncluded ? nextRound.bonusMask : nextRound.mask;
+    for (let m = 1; m <= 45; m++) {
+      if ((nextMask & (1n << BigInt(m))) !== 0n) freq[m]++;
+    }
   }
 
-  // ------------------------------
-  // 3) 패턴 기반 분석 (10단위 / 7단위)
-  // ------------------------------
-  function computePatternNext(unitSize: number): PatternNextFreq {
-    const buckets = patternBuckets(roundObj.numbers, unitSize);
-    const key = patternKey(buckets);
-    const freq = initFreq();
+  return freq;
+}
 
-    for (const r of roundsSorted) {
-      const rBuckets = patternBuckets(r.numbers, unitSize);
-      if (patternKey(rBuckets) !== key) continue;
+// ----------------------------------
+// 분석 메인
+// ----------------------------------
+export async function analyzePremiumRound(
+  round: number,
+  bonusIncluded: boolean,
+  recentCount: number
+): Promise<PremiumAnalysisResult> {
+  const target = getPremiumRound(round);
+  if (!target) throw new Error("Round not found");
 
-      const nextRound = getPremiumRound(r.drwNo + 1);
-      if (!nextRound) continue;
+  const targetMask = bonusIncluded ? target.bonusMask : target.mask;
+  const latest = getPremiumLatestRound();
+  const rounds = getPremiumRange(1, round - 1);
 
-      const nextNums = bonusIncluded
-        ? [...nextRound.numbers, nextRound.bonus]
-        : nextRound.numbers;
+  // -----------------------------------
+  // 초기화
+  // -----------------------------------
+  const perNumberNextFreq: Record<number, Record<number, number>> = {};
+  const kMatchNext: {
+    "1": number[];
+    "2": number[];
+    "3": number[];
+    "4+": number[];
+  } = {
+    "1": Array(46).fill(0),
+    "2": Array(46).fill(0),
+    "3": Array(46).fill(0),
+    "4+": Array(46).fill(0),
+  };
 
-      nextNums.forEach((n) => freq[n]++);
+  // 각 선택된 번호별 빈도 초기화
+  for (const n of target.numbers) {
+    const freq: Record<number, number> = {};
+    for (let i = 1; i <= 45; i++) freq[i] = 0;
+    perNumberNextFreq[n] = freq;
+  }
+
+  // -----------------------------------
+  // 메인 루프
+  // -----------------------------------
+  for (const r of rounds) {
+    const k = inter(targetMask, r.mask);
+    const next = getPremiumRound(r.drwNo + 1);
+    if (!next) continue;
+    const nextMask = bonusIncluded ? next.bonusMask : next.mask;
+
+    // 선택된 번호별 다음 회차 빈도 계산
+    for (const n of target.numbers) {
+      if ((r.mask & (1n << BigInt(n))) !== 0n) {
+        for (let m = 1; m <= 45; m++) {
+          if ((nextMask & (1n << BigInt(m))) !== 0n) {
+            perNumberNextFreq[n][m]++;
+          }
+        }
+      }
     }
 
-    return { patternKey: key, freq };
+    // K-match
+    for (let m = 1; m <= 45; m++) {
+      if ((nextMask & (1n << BigInt(m))) !== 0n) {
+        if (k >= 4) kMatchNext["4+"][m]++;
+        else if (k === 3) kMatchNext["3"][m]++;
+        else if (k === 2) kMatchNext["2"][m]++;
+        else if (k === 1) kMatchNext["1"][m]++;
+      }
+    }
   }
 
-  const pattern10NextFreq = computePatternNext(10);
-  const pattern7NextFreq = computePatternNext(7);
+  // -----------------------------------
+  // 패턴 다음 회차 빈도
+  // -----------------------------------
+  const pattern10Next = computePatternNext(
+    10,
+    rounds,
+    target.numbers,
+    bonusIncluded
+  );
+  const pattern7Next = computePatternNext(
+    7,
+    rounds,
+    target.numbers,
+    bonusIncluded
+  );
 
-  // ------------------------------
-  // 4) 최근 N회 빈도
-  // ------------------------------
-  const selectedIndex = roundsSorted.findIndex((r) => r.drwNo === round);
-  if (selectedIndex === -1) throw new Error("선택한 회차 없음");
+  // -----------------------------------
+  // 최근 N회 빈도
+  // -----------------------------------
+  const recentFreqArr = Array(46).fill(0);
+  const recentStart = Math.max(1, latest - recentCount + 1);
+  const recentRounds = getPremiumRange(recentStart, latest);
 
-  const startIdx = Math.max(0, selectedIndex - recentCount) + 1;
-  const recentRounds = roundsSorted.slice(startIdx, selectedIndex + 1);
+  for (const r of recentRounds) {
+    const m = bonusIncluded ? r.bonusMask : r.mask;
+    for (let n = 1; n <= 45; n++) {
+      if ((m & (1n << BigInt(n))) !== 0n) recentFreqArr[n]++;
+    }
+  }
 
-  const recentFreq = initFreq();
-  recentRounds.forEach((r) => {
-    const nums = bonusIncluded ? [...r.numbers, r.bonus] : r.numbers;
-    nums.forEach((n) => recentFreq[n]++);
-  });
+  // -----------------------------------
+  // 다음 회차
+  // -----------------------------------
+  const nextObj = getPremiumRound(round + 1);
 
-  // ------------------------------
-  // 5) 다음 회차 정보
-  // ------------------------------
-  const nextRoundData = getPremiumRound(round + 1);
-  const nextRound = nextRoundData
-    ? {
-        round: nextRoundData.drwNo,
-        numbers: nextRoundData.numbers,
-        bonus: bonusIncluded ? nextRoundData.bonus : null,
-      }
-    : null;
-
-  // ------------------------------
-  // 결과 반환
-  // ------------------------------
-  const result: PremiumAnalysisResult = {
+  return {
     round,
     bonusIncluded,
     perNumberNextFreq,
-    kMatchNextFreq,
-    pattern10NextFreq,
-    pattern7NextFreq,
-    recentFreq,
-    nextRound,
+    kMatchNextFreq: {
+      "1": arrToRecord(kMatchNext["1"]),
+      "2": arrToRecord(kMatchNext["2"]),
+      "3": arrToRecord(kMatchNext["3"]),
+      "4+": arrToRecord(kMatchNext["4+"]),
+    },
+    pattern10NextFreq: arrToRecord(pattern10Next),
+    pattern7NextFreq: arrToRecord(pattern7Next),
+    recentFreq: arrToRecord(recentFreqArr),
+    nextRound: nextObj ? nextObj.numbers : null,
     generatedAt: new Date().toISOString(),
   };
-
-  await redisSet(cacheKey, result, 6 * 60 * 60);
-  return result;
 }

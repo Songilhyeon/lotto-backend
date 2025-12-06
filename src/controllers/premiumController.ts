@@ -1,4 +1,5 @@
-// premiumController.ts
+// premiumController.ts (bitmask 버전 최종본)
+
 import { Request, Response } from "express";
 import {
   analyzePremiumRound,
@@ -12,24 +13,25 @@ import { initializePremiumCache, redis } from "../lib/premiumCache";
 export async function getPremiumAnalysis(req: Request, res: Response) {
   try {
     const round = Number(req.query.round);
-    if (!round || round < 1) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "round required and must be >= 1" });
+    if (isNaN(round) || round < 1) {
+      return res.status(400).json({
+        ok: false,
+        error: "round must be a number >= 1",
+      });
     }
 
     const bonusIncluded =
       req.query.bonusIncluded === "true" || req.query.bonusIncluded === "1";
-    const recentCount = Number(req.query.recent) || 10; // 기본 최근 10회
 
-    // 실제 분석 호출
+    const recentCount = Number(req.query.recent) || 10;
+
+    // 실행
     const result: PremiumAnalysisResult = await analyzePremiumRound(
       round,
       bonusIncluded,
       recentCount
     );
 
-    // 프론트 최적화: 필요한 최소 데이터만 전달
     const optimized = {
       round: result.round,
       bonusIncluded: result.bonusIncluded,
@@ -37,7 +39,7 @@ export async function getPremiumAnalysis(req: Request, res: Response) {
       kMatchNextFreq: result.kMatchNextFreq,
       pattern10NextFreq: result.pattern10NextFreq,
       pattern7NextFreq: result.pattern7NextFreq,
-      recentFreq: result.recentFreq, // 이미 recentCount 반영됨
+      recentFreq: result.recentFreq,
       nextRound: result.nextRound,
       generatedAt: result.generatedAt,
     };
@@ -45,7 +47,10 @@ export async function getPremiumAnalysis(req: Request, res: Response) {
     res.json({ ok: true, data: optimized });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ ok: false, error: err.message || "internal error" });
+    res.status(500).json({
+      ok: false,
+      error: err.message || "internal error",
+    });
   }
 }
 
@@ -59,6 +64,9 @@ export async function rebuildPremiumCache(req: Request, res: Response) {
     res.json({ ok: true, message: "Premium cache rebuilt" });
   } catch (err: any) {
     console.error(err);
-    res.status(500).json({ ok: false, error: err.message || "internal error" });
+    res.status(500).json({
+      ok: false,
+      error: err.message || "internal error",
+    });
   }
 }

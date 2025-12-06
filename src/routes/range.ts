@@ -52,28 +52,29 @@ function getRangeCounts(numbers: number[], unit: number) {
   return counts;
 }
 
-/** 과거 회차 중 동일 패턴 찾기 */
+/** 과거 회차 중 유사 패턴 찾기 (허용 오차 적용) */
 function findMatchingRounds(
   targetCounts: Record<string, number>,
   unit: number,
-  searchRounds: OptimizedLottoNumber[]
+  searchRounds: OptimizedLottoNumber[],
+  includeBonus: boolean,
+  tolerance = 0 // 프런트에서 전달된 허용 오차
 ): MatchingRoundInfo[] {
   const matches: MatchingRoundInfo[] = [];
 
   for (const rec of searchRounds) {
-    const numbers = getNumbers(rec, false);
+    const numbers = getNumbers(rec, includeBonus);
     const counts = getRangeCounts(numbers, unit);
 
-    // 패턴 동일성 검사
     const matched = Object.keys(targetCounts).every(
-      (key) => counts[key] === targetCounts[key]
+      (key) =>
+        Math.abs((counts[key] || 0) - (targetCounts[key] || 0)) <= tolerance
     );
 
     if (!matched) continue;
 
-    // 다음 회차 번호 빈도
     const next = sortedLottoCache.find((i) => i.drwNo === rec.drwNo + 1);
-    const nextNumbers = next ? getNumbers(next, false) : [];
+    const nextNumbers = next ? getNumbers(next, includeBonus) : [];
 
     const nextFreq: Record<number, number> = {};
     nextNumbers.forEach((n) => {
@@ -110,6 +111,7 @@ router.get("/", (req: Request, res: Response) => {
   const start = Number(req.query.start);
   const end = Number(req.query.end);
   const includeBonus = req.query.includeBonus === "true";
+  const tolerance = Number(req.query.tolerance ?? 0);
 
   if (Number.isNaN(start) || Number.isNaN(end) || start > end) {
     return res.status(400).json({
@@ -119,9 +121,15 @@ router.get("/", (req: Request, res: Response) => {
     } satisfies ApiResponse<null>);
   }
 
-  /** -----------------------
-   *  선택된 회차 데이터
-   ------------------------*/
+  if (Number.isNaN(tolerance) || tolerance < 0) {
+    return res.status(400).json({
+      success: false,
+      error: "INVALID_TOLERANCE",
+      message: "tolerance 값이 잘못되었습니다.",
+    } satisfies ApiResponse<null>);
+  }
+
+  /** 선택된 회차 데이터 */
   const selected = sortedLottoCache.find((i) => i.drwNo === end);
   if (!selected) {
     return res.status(404).json({
@@ -132,9 +140,7 @@ router.get("/", (req: Request, res: Response) => {
   }
   const selectedNumbers = getNumbers(selected, includeBonus);
 
-  /** -----------------------
-   *  다음 회차 NextRound 추가
-   ------------------------*/
+  /** 다음 회차 NextRound 추가 */
   const next = sortedLottoCache.find((i) => i.drwNo === end + 1);
   const nextRound = next
     ? {
@@ -142,30 +148,40 @@ router.get("/", (req: Request, res: Response) => {
         numbers: getNumbers(next, false),
         bonus: next.bnusNo,
       }
-    : null; // 마지막 회차면 null
+    : null;
 
-  /** -----------------------
-   *  검색 범위 (start ~ end)
-   ------------------------*/
+  /** 검색 범위 (start ~ end) */
   const searchRounds = sortedLottoCache.filter(
     (i) => i.drwNo >= start && i.drwNo < end
   );
 
-  /** ---------- 10단위 분석 ---------- */
+  /** 10단위 분석 */
   const counts10 = getRangeCounts(selectedNumbers, 10);
-  const matching10 = findMatchingRounds(counts10, 10, searchRounds);
+  const matching10 = findMatchingRounds(
+    counts10,
+    10,
+    searchRounds,
+    includeBonus,
+    tolerance
+  );
   const nextFreq10 = accumulateNextFrequencies(matching10);
 
-  /** ---------- 7단위 분석 ---------- */
+  /** 7단위 분석 */
   const counts7 = getRangeCounts(selectedNumbers, 7);
-  const matching7 = findMatchingRounds(counts7, 7, searchRounds);
+  const matching7 = findMatchingRounds(
+    counts7,
+    7,
+    searchRounds,
+    includeBonus,
+    tolerance
+  );
   const nextFreq7 = accumulateNextFrequencies(matching7);
 
   return res.json({
     success: true,
     data: {
       selectedRound: { round: end, numbers: selectedNumbers },
-      nextRound, // ← 추가됨
+      nextRound,
       ranges: {
         "10": {
           counts: counts10,

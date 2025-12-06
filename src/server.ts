@@ -16,7 +16,7 @@ async function bootstrap() {
     console.log(">>> Free Lotto Cache 초기화 완료");
 
     // 2️⃣ Premium 캐시 초기화 (sortedLottoCache 사용)
-    await initializePremiumCache();
+    initializePremiumCache();
     console.log(">>> Premium Cache 초기화 완료");
 
     // 3️⃣ 서버 시작
