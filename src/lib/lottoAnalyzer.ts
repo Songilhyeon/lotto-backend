@@ -13,9 +13,15 @@ export interface PremiumAnalysisResult {
   pattern10NextFreq: Record<number, number>;
   pattern7NextFreq: Record<number, number>;
   recentFreq: Record<number, number>;
-  nextRound: number[] | null;
+  nextRound: NextRoundObj | null;
   generatedAt: string;
 }
+
+type NextRoundObj = {
+  round: number;
+  numbers: number[];
+  bonus?: number | null;
+};
 
 // ----------------------------------
 // Bitmask popcount
@@ -44,7 +50,6 @@ function arrToRecord(arr: number[]): Record<number, number> {
 
 // ----------------------------------
 // 숫자 배열을 단위(unitSize)별로 버킷으로 나누기
-// 예: unitSize=10, [1,3,12,22] → [1,1,1,0,0,...] 등
 // ----------------------------------
 function patternBuckets(numbers: number[], unitSize: number): number[] {
   const buckets = Array(Math.ceil(45 / unitSize)).fill(0);
@@ -56,7 +61,7 @@ function patternBuckets(numbers: number[], unitSize: number): number[] {
 }
 
 // ----------------------------------
-// 버킷 배열을 문자열 키로 변환 (패턴 비교용)
+// 버킷 배열을 문자열 키로 변환
 // ----------------------------------
 function patternKey(buckets: number[]): string {
   return buckets.join("-");
@@ -123,7 +128,10 @@ export async function analyzePremiumRound(
   };
 
   // 각 선택된 번호별 빈도 초기화
-  for (const n of target.numbers) {
+  const numbersToTrack = target.numbers.concat(
+    bonusIncluded && target.bonus ? [target.bonus] : []
+  );
+  for (const n of numbersToTrack) {
     const freq: Record<number, number> = {};
     for (let i = 1; i <= 45; i++) freq[i] = 0;
     perNumberNextFreq[n] = freq;
@@ -138,13 +146,19 @@ export async function analyzePremiumRound(
     if (!next) continue;
     const nextMask = bonusIncluded ? next.bonusMask : next.mask;
 
-    // 선택된 번호별 다음 회차 빈도 계산
-    for (const n of target.numbers) {
-      if ((r.mask & (1n << BigInt(n))) !== 0n) {
-        for (let m = 1; m <= 45; m++) {
-          if ((nextMask & (1n << BigInt(m))) !== 0n) {
-            perNumberNextFreq[n][m]++;
-          }
+    // 선택된 번호 + 보너스(옵션)별 다음 회차 빈도 계산
+    for (const n of numbersToTrack) {
+      const inCurrent =
+        (r.mask & (1n << BigInt(n))) !== 0n ||
+        (bonusIncluded &&
+          target.bonus === n &&
+          (r.bonusMask & (1n << BigInt(n))) !== 0n);
+
+      if (!inCurrent) continue;
+
+      for (let m = 1; m <= 45; m++) {
+        if ((nextMask & (1n << BigInt(m))) !== 0n) {
+          perNumberNextFreq[n][m]++;
         }
       }
     }
@@ -193,7 +207,15 @@ export async function analyzePremiumRound(
   // -----------------------------------
   // 다음 회차
   // -----------------------------------
+
   const nextObj = getPremiumRound(round + 1);
+  const nextRoundWithBonus: NextRoundObj | null = nextObj
+    ? {
+        round: nextObj.drwNo,
+        numbers: nextObj.numbers,
+        bonus: nextObj.bonus, // 항상 포함
+      }
+    : null;
 
   return {
     round,
@@ -208,7 +230,7 @@ export async function analyzePremiumRound(
     pattern10NextFreq: arrToRecord(pattern10Next),
     pattern7NextFreq: arrToRecord(pattern7Next),
     recentFreq: arrToRecord(recentFreqArr),
-    nextRound: nextObj ? nextObj.numbers : null,
+    nextRound: nextRoundWithBonus, // NextRoundObj 형태로 전달
     generatedAt: new Date().toISOString(),
   };
 }
