@@ -194,8 +194,8 @@ export async function analyzePremiumRound(
   // 최근 N회 빈도
   // -----------------------------------
   const recentFreqArr = Array(46).fill(0);
-  const recentStart = Math.max(1, latest - recentCount + 1);
-  const recentRounds = getPremiumRange(recentStart, latest);
+  const recentStart = Math.max(1, round - recentCount + 1);
+  const recentRounds = getPremiumRange(recentStart, round);
 
   for (const r of recentRounds) {
     const m = bonusIncluded ? r.bonusMask : r.mask;

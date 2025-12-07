@@ -4,12 +4,14 @@ dotenv.config(); // .env 파일 로드
 import { app, prisma } from "./app";
 import { getLottoData } from "./lib/lottoCache";
 import { initializePremiumCache } from "./lib/premiumCache";
+import { scheduleWeeklyRebuild } from "./scheduler/premiumAutoRebuild";
 
 const PORT = process.env.PORT || 4000;
 
 async function bootstrap() {
   try {
-    console.log(">>> 서버 부트스트랩 시작");
+    const now = new Date();
+    console.log(">>> 서버 부트스트랩 시작", now.toLocaleString());
 
     // 1️⃣ 무료 로또 캐시 초기화
     await getLottoData();
@@ -22,6 +24,7 @@ async function bootstrap() {
     // 3️⃣ 서버 시작
     const server = app.listen(PORT, () => {
       console.log(`>>> Server running on port ${PORT}`);
+      scheduleWeeklyRebuild();
     });
 
     // 4️⃣ 종료 시 Prisma 연결 해제
