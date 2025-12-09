@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { sortedLottoCache } from "../lib/lottoCache";
-import { LottoNumber, OptimizedLottoNumber } from "../types/lotto";
+import { OptimizedLottoNumber } from "../types/lotto";
 import { ApiResponse } from "../types/api";
 
 const router = Router();
@@ -25,6 +25,7 @@ interface AnalysisResult {
 interface SelectedRound {
   numbers: number[];
   round: number;
+  bonus: number;
 }
 
 interface InternalResult extends AnalysisResult {
@@ -83,9 +84,11 @@ router.get("/", (req: Request, res: Response) => {
   }
 
   const selectedNumbers = getNumbers(selected, includeBonus);
+  const numbers = getNumbers(selected, false);
   const selectedRound: SelectedRound = {
     round: selected.drwNo,
-    numbers: selectedNumbers,
+    numbers: numbers,
+    bonus: selected.bnusNo,
   };
 
   // --- 검색 범위 필터 ---

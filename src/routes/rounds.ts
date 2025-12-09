@@ -9,6 +9,7 @@ const router = Router();
 router.get("/", async (req: Request, res: Response) => {
   const start = Number(req.query.start);
   const endRaw = Number(req.query.end);
+  const includeBonus = req.query.includeBonus === "true";
 
   // 1) 숫자 체크
   if (Number.isNaN(start) || Number.isNaN(endRaw)) {

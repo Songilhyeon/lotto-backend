@@ -21,7 +21,7 @@ interface RangeResult {
 
 /** API 응답 구조 */
 interface ApiData {
-  selectedRound: { round: number; numbers: number[] };
+  selectedRound: { round: number; numbers: number[]; bonus: number };
   nextRound: { round: number; numbers: number[]; bonus: number } | null;
   ranges: { "10": RangeResult; "7": RangeResult };
 }
@@ -77,6 +77,8 @@ function findMatchingRounds(
     const nextNumbers = next ? getNumbers(next, includeBonus) : [];
 
     const nextFreq: Record<number, number> = {};
+    for (let i = 1; i <= 45; i++) nextFreq[i] = 0;
+
     nextNumbers.forEach((n) => {
       nextFreq[n] = (nextFreq[n] || 0) + 1;
     });
@@ -139,6 +141,7 @@ router.get("/", (req: Request, res: Response) => {
     } satisfies ApiResponse<null>);
   }
   const selectedNumbers = getNumbers(selected, includeBonus);
+  const numbers = getNumbers(selected, false);
 
   /** 다음 회차 NextRound 추가 */
   const next = sortedLottoCache.find((i) => i.drwNo === end + 1);
@@ -180,7 +183,11 @@ router.get("/", (req: Request, res: Response) => {
   return res.json({
     success: true,
     data: {
-      selectedRound: { round: end, numbers: selectedNumbers },
+      selectedRound: {
+        round: end,
+        numbers: numbers,
+        bonus: selected.bnusNo,
+      },
       nextRound,
       ranges: {
         "10": {

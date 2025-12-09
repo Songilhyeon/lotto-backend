@@ -30,6 +30,7 @@ export interface PremiumAnalysisResult {
   kMatchNextFreq: KMatchNextFreq;
   pattern10NextFreq: PatternNextFreq;
   pattern7NextFreq: PatternNextFreq;
+  pattern5NextFreq: PatternNextFreq;
   recentFreq: { [num: number]: number };
   generatedAt: string;
 }

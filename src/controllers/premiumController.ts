@@ -4,7 +4,7 @@ import { Request, Response } from "express";
 import {
   analyzePremiumRound,
   PremiumAnalysisResult,
-} from "../lib/lottoAnalyzer";
+} from "../lib/premiumAnalyzer";
 import { initializePremiumCache, redis } from "../lib/premiumCache";
 
 // ------------------------------
@@ -39,11 +39,13 @@ export async function getPremiumAnalysis(req: Request, res: Response) {
       kMatchNextFreq: result.kMatchNextFreq,
       pattern10NextFreq: result.pattern10NextFreq,
       pattern7NextFreq: result.pattern7NextFreq,
+      pattern5NextFreq: result.pattern5NextFreq,
       recentFreq: result.recentFreq,
       nextRound: result.nextRound,
       generatedAt: result.generatedAt,
     };
 
+    console.log(optimized);
     res.json({ ok: true, data: optimized });
   } catch (err: any) {
     console.error(err);
