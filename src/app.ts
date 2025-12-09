@@ -61,7 +61,11 @@ app.get("/api/visit", (req: Request, res: Response) => {
       // 비동기 로그 기록
       const logLine = `${new Date().toISOString()} - ${ip}\n`;
       fs.appendFile(logFile, logLine, (err) => {
-        if (err) console.error("Failed to write visit log:", err);
+        if (err) {
+          console.error("Log write error:", err);
+        } else {
+          console.log("Write success:", logFile);
+        }
       });
     }
 
