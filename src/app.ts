@@ -18,8 +18,22 @@ import lottoRangeRouter from "./routes/range";
 import lottoPostsRouter from "./routes/posts";
 import lottoPremiumRouter from "./routes/premium";
 
+import fs from "fs";
+import path from "path";
+
 export const app = express();
+
 export const prisma = new PrismaClient();
+
+const logFile = path.join(__dirname, "visit.log");
+const visitedIPs = new Set<string>();
+// 서버 시작 시 기존 로그 읽어 총 방문자 수 초기화
+let totalVisits = 0;
+if (fs.existsSync(logFile)) {
+  const data = fs.readFileSync(logFile, "utf8");
+  totalVisits = data.trim() === "" ? 0 : data.trim().split("\n").length;
+}
+const getToday = () => new Date().toISOString().split("T")[0];
 
 // CORS 설정
 app.use(
@@ -31,6 +45,33 @@ app.use(
 
 app.use(express.json());
 app.use(cookieParser());
+
+app.get("/api/visit", (req: Request, res: Response) => {
+  try {
+    const ip =
+      req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+    const today = getToday();
+    const ipKey = `${today}:${ip}`;
+
+    // 오늘 방문 IP가 아직 없으면 기록
+    if (!visitedIPs.has(ipKey)) {
+      visitedIPs.add(ipKey);
+      totalVisits++; // 메모리 카운트 증가
+
+      // 비동기 로그 기록
+      const logLine = `${new Date().toISOString()} - ${ip}\n`;
+      fs.appendFile(logFile, logLine, (err) => {
+        if (err) console.error("Failed to write visit log:", err);
+      });
+    }
+
+    // totalVisits는 메모리에서 바로 반환 → 빠른 응답
+    res.json({ message: "Visit logged", totalVisits });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to log visit" });
+  }
+});
 
 // 라우터 등록
 app.use("/api/auth", authRouter);

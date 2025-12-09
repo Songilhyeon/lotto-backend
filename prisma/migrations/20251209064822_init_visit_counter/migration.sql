@@ -1,0 +1,9 @@
+-- CreateTable
+CREATE TABLE "VisitCounter" (
+    "id" SERIAL NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 0,
+    "lastVisit" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "VisitCounter_pkey" PRIMARY KEY ("id")
+);

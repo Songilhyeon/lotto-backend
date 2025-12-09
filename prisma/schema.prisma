@@ -199,3 +199,10 @@ model Tag {
 
   posts PostTag[]
 }
+
+model VisitCounter {
+  id        Int      @id @default(autoincrement())
+  count     Int      @default(0) // 총 방문 횟수
+  lastVisit DateTime @default(now()) // 마지막 방문 시간
+  createdAt DateTime @default(now()) // 생성 시간
+}
