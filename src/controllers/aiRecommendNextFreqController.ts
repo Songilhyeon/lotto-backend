@@ -1,40 +1,36 @@
 import { Request, Response } from "express";
 import { getPremiumRange } from "../lib/premiumCache";
 import { recommendAIWithNextFreq } from "../lib/aiRecommendWithNextFreq";
+import { parseRecommendParams } from "../utils/requestUtils";
 
-export async function getAiNextFreqRecommendation(req: Request, res: Response) {
+export async function getAiRecommendNextFreqController(req: Request, res: Response) {
   try {
-    const startParam = req.query.start;
-    const endParam = req.query.end;
-    const clusterUnitParam = req.query.clusterUnit;
+    const { params, error } = parseRecommendParams(req);
 
-    if (!startParam || !endParam)
+    if (error) {
+      return res.status(400).json({ ok: false, error });
+    }
+
+    if (!params.start || !params.end) {
       return res
         .status(400)
         .json({ ok: false, error: "start and end query required" });
+    }
 
-    const start = Number(startParam);
-    const end = Number(endParam);
-    const clusterUnit = clusterUnitParam ? Number(clusterUnitParam) : 5;
+    const rounds = getPremiumRange(params.start, params.end);
 
-    if (isNaN(start) || isNaN(end) || isNaN(clusterUnit))
-      return res
-        .status(400)
-        .json({ ok: false, error: "start, end, clusterUnit must be numbers" });
-    const rounds = getPremiumRange(Number(start), Number(end)); // 전체 회차 가져오기
-
-    // weight를 query나 body로 받는다면 여기서 변환
+    // Default weight if not provided
     const weight = {
-      hot: Number(req.query.hot ?? 1),
-      cold: Number(req.query.cold ?? 1),
-      streak: Number(req.query.streak ?? 1),
-      pattern: Number(req.query.pattern ?? 1),
-      cluster: Number(req.query.cluster ?? 1),
-      random: Number(req.query.random ?? 1),
-      nextFreq: Number(req.query.nextFreq ?? 1),
+      hot: params.weight?.hot ?? 1,
+      cold: params.weight?.cold ?? 1,
+      streak: params.weight?.streak ?? 1,
+      pattern: params.weight?.pattern ?? 1,
+      cluster: params.weight?.cluster ?? 1,
+      random: params.weight?.random ?? 1,
+      nextFreq: params.weight?.nextFreq ?? 1,
     };
 
-    const result = await recommendAIWithNextFreq(rounds, weight);
+    const result = await recommendAIWithNextFreq(rounds, weight, params.clusterUnit);
 
     return res.json({ ok: true, result });
   } catch (err: any) {

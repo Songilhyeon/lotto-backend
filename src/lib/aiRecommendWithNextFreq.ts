@@ -2,6 +2,7 @@
 import { PremiumLottoRecord } from "./premiumCache";
 import { analyzePremiumRound, PremiumAnalysisResult } from "./premiumAnalyzer";
 import { normalizeScores } from "../utils/normalizeScore";
+import { AiFeatureHelper } from "./aiFeatures";
 
 export interface WeightConfig {
   hot: number;
@@ -50,51 +51,20 @@ export async function recommendAIWithNextFreq(
   );
 
   const nextFreqMap = analysis.perNumberNextFreq;
-  const freq = Array(46).fill(0);
-
-  rounds.forEach((r) => {
-    r.numbers.forEach((n) => freq[n]++);
-  });
-
-  const latest = rounds[rounds.length - 1];
-  const prev = rounds[rounds.length - 2];
-
   // 2. 번호별 원본 점수 계산
   const rawScoreList: NumberScoreDetail[] = [];
+  const helper = new AiFeatureHelper(rounds);
 
   for (let num = 1; num <= 45; num++) {
-    const hot = freq[num];
-    const cold = rounds.length - freq[num];
-
-    const streak =
-      (latest.numbers.includes(num) ? 1 : 0) +
-      (prev?.numbers.includes(num) ? 0.5 : 0);
-
-    const lastDigit = num % 10;
-    const isOdd = num % 2 === 1;
-
-    const oddRatio =
-      rounds.filter((r) => r.numbers.filter((x) => x % 2 === 1).length >= 3)
-        .length / rounds.length;
-
-    const lastDigitFreq =
-      rounds.filter((r) => r.numbers.some((x) => x % 10 === lastDigit)).length /
-      rounds.length;
-
-    const pattern = oddRatio * (isOdd ? 1 : 0.5) + lastDigitFreq;
-
-    const clusterIndex = Math.floor((num - 1) / clusterUnit);
-    const cluster =
-      rounds.filter((r) =>
-        r.numbers.some(
-          (x) => Math.floor((x - 1) / clusterUnit) === clusterIndex
-        )
-      ).length / rounds.length;
-
+    const hot = helper.getHot(num);
+    const cold = helper.getCold(num);
+    const streak = helper.getStreakSimple(num);
+    const pattern = helper.getPatternComplex(num);
+    const cluster = helper.getCluster(num, clusterUnit);
     const random = Math.random();
 
     let nextFreqScore = 0;
-    for (const prevNum of latest.numbers) {
+    for (const prevNum of helper.latest.numbers) {
       nextFreqScore += nextFreqMap[prevNum]?.[num] ?? 0;
     }
 

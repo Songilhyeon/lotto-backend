@@ -45,7 +45,6 @@ export async function getPremiumAnalysis(req: Request, res: Response) {
       generatedAt: result.generatedAt,
     };
 
-    console.log(optimized);
     res.json({ ok: true, data: optimized });
   } catch (err: any) {
     console.error(err);

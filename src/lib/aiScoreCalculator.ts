@@ -11,10 +11,15 @@ export const AI_WEIGHTS = {
 /**
  * 안전한 패턴 가중치 선택
  */
+// function getPatternWeights(clusterUnit: number) {
+//   if (clusterUnit >= 9) return { w10: 0.6, w7: 0.3, w5: 0.1 };
+//   if (clusterUnit >= 7) return { w10: 0.3, w7: 0.5, w5: 0.2 };
+//   return { w10: 0.2, w7: 0.3, w5: 0.5 };
+// }
 function getPatternWeights(clusterUnit: number) {
-  if (clusterUnit >= 9) return { w10: 0.6, w7: 0.3, w5: 0.1 };
-  if (clusterUnit >= 7) return { w10: 0.3, w7: 0.5, w5: 0.2 };
-  return { w10: 0.2, w7: 0.3, w5: 0.5 };
+  if (clusterUnit >= 9) return { w10: 1.0, w7: 0.1, w5: 0.1 };
+  if (clusterUnit >= 7) return { w10: 0.1, w7: 1.0, w5: 0.1 };
+  return { w10: 0.1, w7: 0.1, w5: 1.0 };
 }
 
 /**
@@ -25,9 +30,9 @@ function getPatternWeights(clusterUnit: number) {
  */
 export function computeAiScore(
   analysis: Partial<PremiumAnalysisResult>,
-  options?: { clusterUnit?: number }
+  clusterUnit?: number
 ): number[] {
-  const { clusterUnit = 5 } = options ?? {};
+  clusterUnit = clusterUnit ?? 5;
   // 인덱스 0은 unused, 1..45 사용
   const score = Array(46).fill(0);
 

@@ -1,29 +1,27 @@
 // controllers/aiRecommendController.ts
 import { Request, Response } from "express";
 import { getAiRecommendation } from "../lib/aiRecommender";
+import { parseRecommendParams } from "../utils/requestUtils";
 
 export async function getAiRecommendationController(
   req: Request,
   res: Response
 ) {
   try {
-    const roundParam = req.query.round;
-    const clusterUnitParam = req.query.clusterUnit;
+    const { params, error } = parseRecommendParams(req);
 
-    if (!roundParam) {
+    if (error) {
+      return res.status(400).json({ ok: false, error });
+    }
+
+    if (!params.round) {
       return res.status(400).json({ ok: false, error: "round query required" });
     }
 
-    const round = Number(roundParam);
-    const clusterUnit = clusterUnitParam ? Number(clusterUnitParam) : 5;
-
-    if (isNaN(round) || isNaN(clusterUnit)) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "round and clusterUnit must be numbers" });
-    }
-
-    const result = await getAiRecommendation({ round, clusterUnit });
+    const result = await getAiRecommendation({
+      round: params.round,
+      clusterUnit: params.clusterUnit,
+    });
 
     return res.json({ ok: true, result });
   } catch (err: any) {

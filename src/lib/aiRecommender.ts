@@ -15,7 +15,7 @@ export async function getAiRecommendation({
   const analysis = await analyzePremiumRound(round, false, 20);
 
   // 1) 원본 점수 생성
-  const rawScore = computeAiScore(analysis, { clusterUnit });
+  const rawScore = computeAiScore(analysis, clusterUnit);
 
   // rawScore = Record<number, number>
 

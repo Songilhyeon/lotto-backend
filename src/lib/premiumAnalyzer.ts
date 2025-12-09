@@ -9,7 +9,7 @@
 // - mask끼리 AND 연산으로 교집합(공통 번호 개수)을 빠르게 계산
 // - 과거의 동일한 '버킷 패턴' (예: 10개 단위 분포)이 나왔을 때 그 다음 회차의 출현 빈도를 집계
 
-import { getPremiumRound, getPremiumRange } from "./premiumCache";
+import { getPremiumRound, getPremiumRange, BASE } from "./premiumCache";
 
 export interface PremiumAnalysisResult {
   round: number;
@@ -42,8 +42,6 @@ type NextRoundObj = {
 // BASE = 1 → 번호 1이 비트 위치 0에 대응 (로또 1..45에 가장 자연스러움)
 // BASE = 0 → 번호 0이 비트 위치 0에 대응 (외부 데이터가 0-based일 때만 사용)
 // 대부분의 실제 로또 데이터는 1..45이므로 BASE=1을 권장합니다.
-
-export const BASE = 1; // 1 → 1~45 / 0 → 0~44 기반
 
 // ----------------------------------
 // 숫자 유효성 검사 (입력 체크 통합)
