@@ -100,7 +100,8 @@ export async function getAiRecommendationAdvanced(
   round: number,
   preset: AiPreset,
   clusterUnit: number = 5,
-  seed: number = Date.now()
+  seed: number = Date.now(),
+  customWeights?: WeightConfig // 새로 추가
 ): Promise<AiRecommendation> {
   const analysis: PremiumAnalysisResult = await analyzePremiumRound(
     round,
@@ -109,10 +110,12 @@ export async function getAiRecommendationAdvanced(
   );
 
   const randomGen = new SeededRandom(seed);
-
   const latestRoundNo = analysis.round;
   const nextFreqMap = analysis.perNumberNextFreq;
   const scores: NumberScoreDetail[] = [];
+
+  // 사용자가 보낸 커스텀 weight가 있으면 그것을 쓰고, 없으면 preset weight 사용
+  const weight = customWeights ?? preset.weight;
 
   for (let num = 1; num <= 45; num++) {
     const hot = Object.values(nextFreqMap).reduce(
@@ -120,24 +123,20 @@ export async function getAiRecommendationAdvanced(
       0
     );
     const cold = 45 - hot;
-    const streak = latestRoundNo % 2 === num % 2 ? 1 : 0; // 간단 예시
-    const lastDigit = num % 10;
-    const pattern = lastDigit / 9; // 0~1 정규화 예시
+    const streak = latestRoundNo % 2 === num % 2 ? 1 : 0;
+    const pattern = (num % 10) / 9;
     const cluster = Math.floor((num - 1) / clusterUnit);
     const random = randomGen.next();
-    const nextFreqScore = Object.values(nextFreqMap).reduce(
-      (acc, nf) => acc + (nf[num] ?? 0),
-      0
-    );
+    const nextFreqScore = hot;
 
     const final =
-      hot * preset.weight.hot +
-      cold * preset.weight.cold +
-      streak * preset.weight.streak +
-      pattern * preset.weight.pattern +
-      cluster * preset.weight.cluster +
-      random * preset.weight.random +
-      nextFreqScore * (preset.weight.nextFreq ?? 1);
+      hot * weight.hot +
+      cold * weight.cold +
+      streak * weight.streak +
+      pattern * weight.pattern +
+      cluster * weight.cluster +
+      random * weight.random +
+      nextFreqScore * (weight.nextFreq ?? 1);
 
     scores.push({
       num,
@@ -152,14 +151,12 @@ export async function getAiRecommendationAdvanced(
     });
   }
 
-  // 정규화 (0~100)
   const maxFinal = Math.max(...scores.map((s) => s.final));
   const minFinal = Math.min(...scores.map((s) => s.final));
   scores.forEach((s) => {
     s.final = ((s.final - minFinal) / (maxFinal - minFinal)) * 100;
   });
 
-  // TOP 6 추천
   const picked = [...scores].sort((a, b) => b.final - a.final).slice(0, 6);
 
   return {

@@ -13,26 +13,17 @@ import lottoNextRouter from "./routes/next";
 import lottoFrequency from "./routes/frequency";
 import lottoNumberLabRouter from "./routes/number-lab";
 import authRouter from "./routes/auth";
-import lottoPatternRouter from "./routes/pattern";
 import lottoRangeRouter from "./routes/range";
 import lottoPostsRouter from "./routes/posts";
 import lottoPremiumRouter from "./routes/premium";
-
-import fs from "fs";
-import path from "path";
 
 export const app = express();
 
 export const prisma = new PrismaClient();
 
-const logFile = path.join(__dirname, "visit.log");
 const visitedIPs = new Set<string>();
-// 서버 시작 시 기존 로그 읽어 총 방문자 수 초기화
+// 서버 시작 시 기존 정보 읽어 총 방문자 수 초기화
 let totalVisits = 0;
-if (fs.existsSync(logFile)) {
-  const data = fs.readFileSync(logFile, "utf8");
-  totalVisits = data.trim() === "" ? 0 : data.trim().split("\n").length;
-}
 const getToday = () => new Date().toISOString().split("T")[0];
 
 // CORS 설정
@@ -57,16 +48,6 @@ app.get("/api/visit", (req: Request, res: Response) => {
     if (!visitedIPs.has(ipKey)) {
       visitedIPs.add(ipKey);
       totalVisits++; // 메모리 카운트 증가
-
-      // 비동기 로그 기록
-      const logLine = `${new Date().toISOString()} - ${ip}\n`;
-      fs.appendFile(logFile, logLine, (err) => {
-        if (err) {
-          console.error("Log write error:", err);
-        } else {
-          console.log("Write success:", logFile);
-        }
-      });
     }
 
     // totalVisits는 메모리에서 바로 반환 → 빠른 응답
@@ -80,7 +61,6 @@ app.get("/api/visit", (req: Request, res: Response) => {
 // 라우터 등록
 app.use("/api/auth", authRouter);
 app.use("/api/posts", lottoPostsRouter);
-app.use("/api/lotto/pattern", lottoPatternRouter);
 app.use("/api/lotto/round", lottoGetRoundRouter);
 app.use("/api/lotto/rounds", lottoGetRoundsRouter);
 app.use("/api/lotto/frequency", lottoFrequency);

@@ -18,8 +18,6 @@ export interface IndependentConfig {
   decay: number;
   noise: number;
 }
-// 유틸 타입: AIVariant 키들
-type AIVariantKey = keyof typeof AIVariants;
 
 // 모델 출력 공통 타입 (getAiRecommendationAdvanced 과 recommendAIIndependent 둘 다 scores 배열을 가짐)
 type ModelWithScores = {
@@ -71,7 +69,7 @@ export async function recommendAIHybrid(
   )) as unknown as ModelWithScores;
 
   // 3. Variant 모델들 (최적화: 루프 돌면서 호출하되, 내부적으로 캐시된 데이터를 쓰거나 가볍게 처리)
-  // *참고*: recommendAIIndependent 내부에서 getPremiumRange를 호출하므로, 
+  // *참고*: recommendAIIndependent 내부에서 getPremiumRange를 호출하므로,
   // 반복 호출 시 Redis/Memory 캐시가 동작하여 성능 저하는 크지 않을 것으로 예상됨.
   // 만약 더 최적화하려면 recommendAIIndependent를 리팩토링하여 features 계산과 scoring을 분리해야 함.
   // 현재는 타입 에러 수정 및 로직 안정화에 집중.

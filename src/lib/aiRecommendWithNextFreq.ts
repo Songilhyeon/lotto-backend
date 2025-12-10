@@ -40,9 +40,8 @@ export interface AIRecommendResult {
 export async function recommendAIWithNextFreq(
   rounds: PremiumLottoRecord[],
   weight: WeightConfig,
-  clusterUnit: number = 5
+  clusterUnit: number = 5 // 기본값 유지
 ): Promise<AIRecommendResult> {
-  // 1. 최근 회차 분석
   const latestRoundNo = rounds[rounds.length - 1].drwNo;
   const analysis: PremiumAnalysisResult = await analyzePremiumRound(
     latestRoundNo,
@@ -51,7 +50,6 @@ export async function recommendAIWithNextFreq(
   );
 
   const nextFreqMap = analysis.perNumberNextFreq;
-  // 2. 번호별 원본 점수 계산
   const rawScoreList: NumberScoreDetail[] = [];
   const helper = new AiFeatureHelper(rounds);
 
@@ -60,7 +58,10 @@ export async function recommendAIWithNextFreq(
     const cold = helper.getCold(num);
     const streak = helper.getStreakSimple(num);
     const pattern = helper.getPatternComplex(num);
+
+    // 🔥 clusterUnit 반영
     const cluster = helper.getCluster(num, clusterUnit);
+
     const random = Math.random();
 
     let nextFreqScore = 0;
@@ -90,26 +91,21 @@ export async function recommendAIWithNextFreq(
     });
   }
 
-  // 3. 최종 점수 정규화 (0~100)
   const normalizedMap = normalizeScores(
     Object.fromEntries(rawScoreList.map((s) => [s.num, s.final]))
   );
 
-  // 4. 정규화된 scoreList 생성
   const scoreList = rawScoreList.map((s) => ({
     ...s,
     final: normalizedMap[s.num],
   }));
 
-  // 5. 추천 번호 (정규화된 점수 기준 TOP 20)
   const top20 = [...scoreList].sort((a, b) => b.final - a.final).slice(0, 20);
-
-  // 최종 추천 6개
   const picked = top20.slice(0, 6);
 
   return {
     combination: picked.map((p) => p.num),
     details: picked,
-    scores: scoreList, // 🔥 전체 정규화된 점수
+    scores: scoreList,
   };
 }

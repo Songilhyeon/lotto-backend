@@ -1,8 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// Prisma schema with full Cascade on foreign keys
 
 generator client {
   provider = "prisma-client-js"
@@ -14,6 +10,9 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// ================================
+// Lotto Numbers
+// ================================
 model LottoNumber {
   drwNo          Int      @id // 회차 번호 (PK)
   drwNoDate      DateTime // 추첨일
@@ -32,7 +31,7 @@ model LottoNumber {
 }
 
 // ================================
-// 🔥 User (소셜 로그인용)
+// User (소셜 로그인용)
 // ================================
 model User {
   id     String  @id @default(cuid())
@@ -46,7 +45,6 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // 관계
   accounts Account[]
   payments Payment[]
   posts    Post[]
@@ -60,12 +58,12 @@ enum UserRole {
 }
 
 // ================================
-// 🔥 Account (구글/네이버/카카오 소셜 계정 저장)
+// Account
 // ================================
 model Account {
   id                String   @id @default(cuid())
   userId            String
-  provider          String // 'google' | 'naver' | 'kakao'
+  provider          String
   providerAccountId String
   accessToken       String?
   refreshToken      String?
@@ -75,14 +73,14 @@ model Account {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId])
 }
 
 // ================================
-// 🔥 Payment (구독 결제 기록)
+// Payment
 // ================================
 model Payment {
   id        String        @id @default(cuid())
@@ -93,7 +91,7 @@ model Payment {
   endDate   DateTime
   createdAt DateTime      @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -105,7 +103,7 @@ enum PaymentStatus {
 }
 
 // ================================
-// 🔥 Post (게시글)
+// Post
 // ================================
 model Post {
   id        String   @id @default(cuid())
@@ -115,20 +113,19 @@ model Post {
   updatedAt DateTime @updatedAt
 
   userId String
-  user   User   @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // 확장 가능
   comments       Comment[]
   likes          Like[]
   tags           PostTag[]
-  category       PostCategory? @relation(fields: [postCategoryId], references: [id])
+  category       PostCategory? @relation(fields: [postCategoryId], references: [id], onDelete: Cascade)
   postCategoryId String?
 
   @@index([userId])
 }
 
 // ================================
-// 🔥 Comment (게시글 댓글)
+// Comment
 // ================================
 model Comment {
   id        String   @id @default(cuid())
@@ -137,17 +134,17 @@ model Comment {
   updatedAt DateTime @updatedAt
 
   userId String
-  user   User   @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   postId String
-  post   Post   @relation(fields: [postId], references: [id])
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([postId])
 }
 
 // ================================
-// 🔥 Like (좋아요 기능)
+// Like
 // ================================
 model Like {
   id        String   @id @default(cuid())
@@ -155,16 +152,16 @@ model Like {
   postId    String
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
-  post Post @relation(fields: [postId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, postId]) // 같은 사용자가 같은 게시글에 여러 번 좋아요 방지
+  @@unique([userId, postId])
   @@index([userId])
   @@index([postId])
 }
 
 // ================================
-// 🔥 PostCategory (게시글 카테고리)
+// PostCategory
 // ================================
 model PostCategory {
   id        String   @id @default(cuid())
@@ -176,20 +173,20 @@ model PostCategory {
 }
 
 // ================================
-// 🔥 PostTag (게시글 태그, N:M 관계)
-// ================================
+// PostTag (N:M)
+// ===============================
 model PostTag {
   postId String
   tagId  String
 
-  post Post @relation(fields: [postId], references: [id])
-  tag  Tag  @relation(fields: [tagId], references: [id])
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([postId, tagId])
 }
 
 // ================================
-// 🔥 Tag (태그)
+// Tag
 // ================================
 model Tag {
   id        String   @id @default(cuid())
@@ -200,9 +197,12 @@ model Tag {
   posts PostTag[]
 }
 
+// ================================
+// VisitCounter
+// ================================
 model VisitCounter {
   id        Int      @id @default(autoincrement())
-  count     Int      @default(0) // 총 방문 횟수
-  lastVisit DateTime @default(now()) // 마지막 방문 시간
-  createdAt DateTime @default(now()) // 생성 시간
+  count     Int      @default(0)
+  lastVisit DateTime @default(now())
+  createdAt DateTime @default(now())
 }

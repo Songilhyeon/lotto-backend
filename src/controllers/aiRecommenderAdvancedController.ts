@@ -1,8 +1,9 @@
-// controllers/aiRecommendController.ts
+// controllers/aiRecommendAdvancedController.ts
 import { Request, Response } from "express";
 import {
   getAiRecommendationAdvanced,
   AiPresets,
+  AiPreset,
 } from "../lib/aiRecommenderAdvanced";
 
 export async function getAiRecommenderAdvancedController(
@@ -10,20 +11,27 @@ export async function getAiRecommenderAdvancedController(
   res: Response
 ) {
   try {
-    const { round, presetName, clusterUnit, seed } = req.body;
+    const { round, presetName, clusterUnit, seed, customWeights } = req.body;
 
     if (!round || typeof round !== "number") {
       return res.status(400).json({ error: "round는 필수 숫자입니다." });
     }
 
-    const preset = AiPresets.find((p) => p.name === presetName);
+    const preset: AiPreset | undefined = AiPresets.find(
+      (p) => p.name === presetName
+    );
     if (!preset)
       return res.status(400).json({ error: "유효하지 않은 preset입니다." });
 
-    // 기존 aiRecommenderAdvanced 사용
+    // customWeights가 있으면 preset.weight에 병합
+    const mergedPreset: AiPreset = {
+      ...preset,
+      weight: { ...preset.weight, ...customWeights },
+    };
+
     const result = await getAiRecommendationAdvanced(
       round,
-      preset,
+      mergedPreset,
       clusterUnit,
       seed
     );
