@@ -23,11 +23,38 @@ model LottoNumber {
   drwtNo5        Int
   drwtNo6        Int
   bnusNo         Int
-  firstPrzwnerCo String // 1등 당첨자 수
-  firstWinamnt   String // 1등 당첨금액
-  totSellamnt    String // 총 판매금액
-  firstAccumamnt String // 1등 누적 당첨금액
-  createdAt      DateTime @default(now())
+  firstPrzwnerCo String
+  firstWinamnt   String
+  totSellamnt    String
+  firstAccumamnt String
+
+  // 신규 컬럼 (nullable)
+  autoWin     Int?
+  semiAutoWin Int?
+  manualWin   Int?
+
+  createdAt DateTime @default(now())
+
+  stores LottoStore[] // 관계 연결
+}
+
+// ================================
+// Lotto Store
+// ================================
+model LottoStore {
+  id      Int    @id @default(autoincrement())
+  drwNo   Int
+  store   String
+  address String
+  rank    Int
+
+  autoWin     Int? // 해당 판매점 자동 당첨자 수
+  semiAutoWin Int? // 반자동
+  manualWin   Int? // 수동
+
+  lotto LottoNumber @relation(fields: [drwNo], references: [drwNo])
+
+  @@unique([drwNo, store]) // ← 여기 추가
 }
 
 // ================================

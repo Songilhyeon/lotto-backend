@@ -12,6 +12,20 @@ export interface LottoNumber {
   firstWinamnt: string;
   totSellamnt: string;
   firstAccumamnt: string;
+
+  autoWin: number | null;
+  semiAutoWin: number | null;
+  manualWin: number | null;
+}
+
+export interface LottoStore {
+  drwNo: number;
+  store: string;
+  address: string;
+  rank: number;
+  autoWin: number | null;
+  semiAutoWin: number | null;
+  manualWin: number | null;
 }
 
 export interface MatchResult {
@@ -22,7 +36,11 @@ export interface MatchResult {
   nextNumbers: number[];
 }
 
-export interface OptimizedLottoNumber extends Omit<LottoNumber, 'firstPrzwnerCo' | 'firstWinamnt' | 'totSellamnt' | 'firstAccumamnt'> {
+export interface OptimizedLottoNumber
+  extends Omit<
+    LottoNumber,
+    "firstPrzwnerCo" | "firstWinamnt" | "totSellamnt" | "firstAccumamnt"
+  > {
   firstPrzwnerCo: number;
   firstWinamnt: number;
   totSellamnt: number;

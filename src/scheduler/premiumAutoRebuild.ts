@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { initializePremiumCache, redis } from "../lib/premiumCache";
-import { saveLatestLotto } from "../lib/saveLatestLotto";
+import { saveLatestLotto } from "../lib/saveLatestLotto"; // 크롤러 기반으로 수정됨
 
 /**
  * KST 기준 최신 로또 회차 계산
@@ -28,7 +28,7 @@ const getLatestRound = (): number => {
 };
 
 /**
- * Premium 캐시 + DB 갱신
+ * Premium 캐시 + DB 갱신 (크롤러 기반)
  */
 async function autoRebuildPremiumCache() {
   try {
@@ -46,14 +46,14 @@ async function autoRebuildPremiumCache() {
     // 1. Redis 캐시 초기화
     await redis.flushdb();
 
-    // 2. Premium 캐시 재생성
+    // 2. 최신 회차 DB + LottoStore 크롤링
+    await saveLatestLotto(latestRound); // 여기서 크롤러 기반 저장
+
+    // 3. Premium 캐시 재생성
     initializePremiumCache();
 
-    // 3. Redis에 최신 회차 저장
+    // 4. Redis에 최신 회차 저장
     await redis.set("latestRound", String(latestRound));
-
-    // 4. DB에도 최신 회차 저장
-    await saveLatestLotto(latestRound);
 
     console.log(
       `[${new Date().toLocaleString()}] Premium cache rebuilt for round ${latestRound}`
@@ -71,9 +71,6 @@ async function autoRebuildPremiumCache() {
  * 매주 토요일 21:00 KST 실행
  */
 export function scheduleWeeklyRebuild() {
-  // node-cron은 서버 시간 기준
-  // 서버가 KST가 아닐 경우 offset을 고려해야 함
-  // 예: 한국 UTC+9 → 12:00 UTC = 21:00 KST
   cron.schedule("0 12 * * 6", async () => {
     console.log(`[${new Date().toLocaleString()}] Cron job started`);
     await autoRebuildPremiumCache();

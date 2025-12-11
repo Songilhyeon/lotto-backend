@@ -1,7 +1,8 @@
 import { prisma } from "../app";
-import { LottoNumber, OptimizedLottoNumber } from "../types/lotto";
+import { LottoNumber, OptimizedLottoNumber, LottoStore } from "../types/lotto";
 
 export const lottoCache = new Map<number, LottoNumber>();
+export const lottoStoreCache: LottoStore[] = [];
 export let sortedLottoCache: OptimizedLottoNumber[] = [];
 
 const toNumber = (value: any): number => {
@@ -24,7 +25,7 @@ export const toOptimized = (item: LottoNumber): OptimizedLottoNumber => ({
     toNumber(item.drwtNo6),
 });
 
-export async function getLottoData() {
+export async function initializeLottoCache() {
   console.log(">>> 전체 로또 데이터 캐싱 시작");
   const records = await prisma.lottoNumber.findMany();
   records.forEach((record) => {
@@ -36,5 +37,12 @@ export async function getLottoData() {
     .sort((a, b) => a.drwNo - b.drwNo);
 
   console.log(`>>> 총 ${records.length}개 회차 캐싱 완료`);
-  return lottoCache;
+
+  // 2️⃣ LottoStore 캐시
+  const storeRecords = await prisma.lottoStore.findMany();
+  storeRecords.forEach((store) => {
+    lottoStoreCache.push(store);
+  });
+
+  console.log(`>>> 총 ${storeRecords.length}개 판매점 LottoStore 캐싱 완료`);
 }
