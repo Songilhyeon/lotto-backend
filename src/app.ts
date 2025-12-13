@@ -8,7 +8,7 @@ import cookieParser from "cookie-parser";
 // 라우터 import
 import lottoGetRoundRouter from "./routes/round";
 import lottoGetRoundsRouter from "./routes/rounds";
-import lottoHistoryRouter from "./routes/history";
+import lottoRecordRouter from "./routes/record";
 import lottoNextRouter from "./routes/next";
 import lottoFrequency from "./routes/frequency";
 import lottoNumberLabRouter from "./routes/number-lab";
@@ -65,7 +65,7 @@ app.use("/api/posts", lottoPostsRouter);
 app.use("/api/lotto/round", lottoGetRoundRouter);
 app.use("/api/lotto/rounds", lottoGetRoundsRouter);
 app.use("/api/lotto/frequency", lottoFrequency);
-app.use("/api/lotto/history", lottoHistoryRouter);
+app.use("/api/lotto/record", lottoRecordRouter);
 app.use("/api/lotto/next", lottoNextRouter);
 app.use("/api/lotto/range", lottoRangeRouter);
 app.use("/api/lotto/numberlab", lottoNumberLabRouter);

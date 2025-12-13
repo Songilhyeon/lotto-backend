@@ -5,6 +5,10 @@ export const lottoCache = new Map<number, LottoNumber>();
 export const lottoStoreCache: LottoStore[] = [];
 export let sortedLottoCache: OptimizedLottoNumber[] = [];
 
+// 최적화용 Map
+export const lottoStoreByRank = new Map<number, LottoStore[]>(); // rank별
+export const lottoStoreIndex = new Map<number, Map<string, LottoStore[]>>(); // rank + region별
+
 const toNumber = (value: any): number => {
   const num = Number(value);
   return Number.isFinite(num) ? num : 0;
@@ -38,11 +42,33 @@ export async function initializeLottoCache() {
 
   console.log(`>>> 총 ${records.length}개 회차 캐싱 완료`);
 
-  // 2️⃣ LottoStore 캐시
+  // -----------------------------
+  // 2️⃣ LottoStore 캐시 최적화
+  // -----------------------------
   const storeRecords = await prisma.lottoStore.findMany();
+
   storeRecords.forEach((store) => {
+    // 전체 배열 유지
     lottoStoreCache.push(store);
+
+    // rank별 Map
+    if (!lottoStoreByRank.has(store.rank)) {
+      lottoStoreByRank.set(store.rank, []);
+    }
+    lottoStoreByRank.get(store.rank)!.push(store);
+
+    // rank + region 2단계 Map
+    const region = store.address.split(" ")[0] || "기타";
+    if (!lottoStoreIndex.has(store.rank)) {
+      lottoStoreIndex.set(store.rank, new Map());
+    }
+    const regionMap = lottoStoreIndex.get(store.rank)!;
+    if (!regionMap.has(region)) {
+      regionMap.set(region, []);
+    }
+    regionMap.get(region)!.push(store);
   });
 
   console.log(`>>> 총 ${storeRecords.length}개 판매점 LottoStore 캐싱 완료`);
+  console.log(`>>> rank별 및 rank+region별 캐시 완료`);
 }

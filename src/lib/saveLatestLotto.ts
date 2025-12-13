@@ -1,5 +1,10 @@
 import { prisma } from "../app";
-import { lottoCache, sortedLottoCache, toOptimized } from "./lottoCache";
+import {
+  lottoCache,
+  sortedLottoCache,
+  toOptimized,
+  lottoStoreCache,
+} from "./lottoCache";
 import { redis } from "./premiumCache";
 import { fetchLottoStores, LottoResult } from "./lottoCrawler";
 
@@ -8,10 +13,8 @@ const getLottoAPI = (round: number | string) =>
 
 export async function saveLatestLotto(round: number) {
   try {
-    // 1️⃣ 메모리 캐시 확인
     if (lottoCache.has(round)) return lottoCache.get(round);
 
-    // 2️⃣ API에서 1등 정보 + 당첨번호 가져오기
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
     const response = await fetch(getLottoAPI(round), {
@@ -24,10 +27,9 @@ export async function saveLatestLotto(round: number) {
     if (apiData.returnValue === "fail")
       throw new Error(`ROUND_NOT_FOUND: ${round}`);
 
-    // 3️⃣ 크롤러에서 판매점/자동·반자동·수동 정보 가져오기
     const crawlData: LottoResult | null = await fetchLottoStores(round);
 
-    // 4️⃣ LottoNumber DB 저장/업데이트
+    // LottoNumber DB 저장/업데이트
     const record = await prisma.lottoNumber.upsert({
       where: { drwNo: round },
       update: {
@@ -67,12 +69,17 @@ export async function saveLatestLotto(round: number) {
       },
     });
 
-    // 5️⃣ LottoStore DB 저장/업데이트
+    // LottoStore DB 저장/업데이트
     if (crawlData?.stores) {
       for (const store of crawlData.stores) {
         await prisma.lottoStore.upsert({
           where: {
-            drwNo_store: { drwNo: round, store: store.store }, // 복합 unique key
+            drwNo_store_address_rank: {
+              drwNo: round,
+              store: store.store,
+              address: store.address ?? "",
+              rank: store.rank ?? 0,
+            },
           },
           update: {
             autoWin: store.autoWin ?? 0,
@@ -91,20 +98,31 @@ export async function saveLatestLotto(round: number) {
             manualWin: store.manualWin ?? 0,
           },
         });
+
+        // 메모리 캐시 업데이트
+        lottoStoreCache.push({
+          drwNo: round,
+          store: store.store,
+          address: store.address,
+          rank: store.rank,
+          autoWin: store.autoWin ?? 0,
+          semiAutoWin: store.semiAutoWin ?? 0,
+          manualWin: store.manualWin ?? 0,
+        });
       }
     }
 
-    // 6️⃣ 메모리 캐시 + Redis 저장
     lottoCache.set(round, record);
     sortedLottoCache.push(toOptimized(record));
     sortedLottoCache.sort((a, b) => a.drwNo - b.drwNo);
+
     await redis.set(`lotto:${round}`, JSON.stringify(record));
 
-    console.log(`회차 ${round} 저장 완료 (API + 크롤러 통합)`);
+    console.log(`✅ 회차 ${round} 저장 완료 (1등 + 2등 통합)`);
 
     return record;
-  } catch (err: any) {
-    console.error(`Error saving lotto round ${round}:`, err);
+  } catch (err) {
+    console.error(`❌ Error saving lotto round ${round}:`, err);
     throw err;
   }
 }

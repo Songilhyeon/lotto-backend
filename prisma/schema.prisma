@@ -54,7 +54,7 @@ model LottoStore {
 
   lotto LottoNumber @relation(fields: [drwNo], references: [drwNo])
 
-  @@unique([drwNo, store]) // ← 여기 추가
+  @@unique([drwNo, store, address, rank])
 }
 
 // ================================
@@ -77,6 +77,10 @@ model User {
   posts    Post[]
   comments Comment[]
   likes    Like[]
+
+  // ✅ 추가
+  histories History[]
+  favorites Favorite[]
 }
 
 enum UserRole {
@@ -232,4 +236,36 @@ model VisitCounter {
   count     Int      @default(0)
   lastVisit DateTime @default(now())
   createdAt DateTime @default(now())
+}
+
+// ================================
+// History (회차별 추천 기록)
+// ================================
+model History {
+  id        String   @id @default(cuid())
+  userId    String
+  round     Int
+  numbers   String // JSON.stringify([1,2,3,4,5,6])
+  score     Float?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([round])
+}
+
+// ================================
+// Favorite (즐겨찾기 번호)
+// ================================
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String // 즐겨찾기 이름
+  numbers   String // JSON.stringify([1,2,3,4,5,6])
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

@@ -16,7 +16,7 @@ const getNumbers = (item: OptimizedLottoNumber, isBonus: boolean) => [
 ];
 
 interface AnalysisResult {
-  drwNo: number;
+  round: number;
   numbers: number[];
 }
 
@@ -71,7 +71,7 @@ router.get("/", async (req: Request, res: Response) => {
   const roundResults: AnalysisResult[] = records.map((item) => {
     const nums = getNumbers(item, includeBonus).sort((a, b) => a - b);
     return {
-      drwNo: item.drwNo,
+      round: item.drwNo,
       numbers: nums,
     };
   });
