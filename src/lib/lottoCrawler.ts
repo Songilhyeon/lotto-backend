@@ -21,7 +21,11 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
   let browser;
   try {
     const url = `https://www.dhlottery.co.kr/store.do?method=topStore&pageGubun=L645&drwNo=${round}`;
-    browser = await puppeteer.launch({ headless: true });
+    // browser = await puppeteer.launch({ headless: true });
+    browser = await puppeteer.launch({
+      headless: true, // "new" 대신 true 사용
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
     const page = await browser.newPage();
 
     await page.setExtraHTTPHeaders({
@@ -31,35 +35,19 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
         "https://www.dhlottery.co.kr/store.do?method=topStore&pageGubun=L645",
     });
 
-    await page.goto(url, { waitUntil: "networkidle0" });
+    // await page.goto(url, { waitUntil: "networkidle0" });
+    await page.goto(url, { waitUntil: "domcontentloaded" });
 
     // 팝업 처리
     try {
       await page.waitForSelector("div.popup.conn_wait_pop", { timeout: 1000 });
-      console.log(`💡 회차 ${round}: 팝업 감지`);
       await page.waitForFunction(
         () => !document.querySelector("div.popup.conn_wait_pop"),
         { timeout: 300000 }
       );
-      console.log(`✅ 회차 ${round}: 팝업 사라짐`);
     } catch {
-      console.log(`💡 회차 ${round}: 팝업 없음`);
+      // 팝업 없으면 무시
     }
-
-    // 1등 테이블 로딩 대기
-    await page.waitForFunction(
-      () => {
-        const table = Array.from(document.querySelectorAll("div.group_content"))
-          .find(
-            (div) =>
-              div.querySelector("h4.title")?.textContent?.trim() ===
-              "1등 배출점"
-          )
-          ?.querySelector("table.tbl_data.tbl_data_col");
-        return table ? table.querySelectorAll("tbody tr").length > 0 : false;
-      },
-      { timeout: 60000 }
-    );
 
     // --- 1등 크롤링 ---
     const firstPrizeStores: LottoStoreInfo[] = await page.evaluate(() => {
@@ -69,13 +57,14 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
             div.querySelector("h4.title")?.textContent?.trim() === "1등 배출점"
         )
         ?.querySelector("table.tbl_data.tbl_data_col");
+
       if (!table) return [];
 
       const storeMap: Record<string, LottoStoreInfo> = {};
 
       Array.from(table.querySelectorAll("tbody tr")).forEach((tr) => {
         const tds = tr.querySelectorAll("td");
-        const rank = 1; // 1등 고정
+        const rank = 1;
         const store = tds[1]?.textContent?.trim() || "";
         const address = tds[3]?.textContent?.trim() || "";
         const typeText = tds[2]?.textContent?.trim() || "";
@@ -103,27 +92,12 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
       return Object.values(storeMap);
     });
 
-    // --- 2등 크롤링 (페이지네이션 처리) ---
-    const secondPrizeStores: LottoStoreInfo[] = [];
-    const maxPages = await page.evaluate(() => {
-      const pageBox = document.querySelector("div.paginate_common");
-      if (!pageBox) return 1;
-      const pages = Array.from(pageBox.querySelectorAll("a"))
-        .map((a) => Number(a.textContent?.trim()))
-        .filter((n) => !isNaN(n));
-      return pages.length > 0 ? Math.max(...pages) : 1;
-    });
+    // --- 2등 크롤링 (안정적 페이지 이동 + 누적) ---
+    const secondPrizeStoresMap: Record<string, LottoStoreInfo> = {};
+    let hasNextPage = true;
+    let currentPage = 1;
 
-    for (let p = 1; p <= maxPages; p++) {
-      if (p > 1) {
-        await page.evaluate((pageNum) => {
-          // @ts-ignore
-          selfSubmit(pageNum);
-        }, p);
-        // 페이지 로딩 대기
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-
+    while (hasNextPage) {
       const storesOnPage: LottoStoreInfo[] = await page.evaluate(() => {
         const table = Array.from(document.querySelectorAll("div.group_content"))
           .find(
@@ -139,17 +113,49 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
           const tds = tr.querySelectorAll("td");
           const store = tds[1]?.textContent?.trim() || "";
           const address = tds[2]?.textContent?.trim() || "";
-          return { rank: 2, store, address };
+          return { rank: 2, store, address, autoWin: 1 };
         });
       });
 
-      secondPrizeStores.push(...storesOnPage);
+      // 중복 업체 autoWin 누적
+      for (const store of storesOnPage) {
+        const key = store.store + "|" + store.address;
+        if (secondPrizeStoresMap[key]) {
+          secondPrizeStoresMap[key].autoWin! += 1;
+        } else {
+          secondPrizeStoresMap[key] = store;
+        }
+      }
+
+      // 다음 페이지 존재 여부 확인
+      hasNextPage = await page.evaluate((pageNum) => {
+        const pageBox = document.getElementById("page_box");
+        if (!pageBox) return false;
+
+        const nextLink = Array.from(pageBox.querySelectorAll("a")).find((a) =>
+          a.getAttribute("onclick")?.includes(`selfSubmit(${pageNum + 1})`)
+        );
+        if (nextLink) {
+          (nextLink as HTMLElement).click();
+          return true;
+        }
+        return false;
+      }, currentPage);
+
+      if (hasNextPage) {
+        currentPage++;
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // 페이지 로딩 대기
+      }
     }
 
     await browser.close();
 
-    const allStores = [...firstPrizeStores, ...secondPrizeStores];
+    const allStores = [
+      ...firstPrizeStores,
+      ...Object.values(secondPrizeStoresMap),
+    ];
 
+    // 1등 기준 전체 합
     const autoWin = firstPrizeStores.reduce(
       (sum, s) => sum + (s.autoWin || 0),
       0

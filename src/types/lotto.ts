@@ -18,16 +18,6 @@ export interface LottoNumber {
   manualWin: number | null;
 }
 
-export interface LottoStore {
-  drwNo: number;
-  store: string;
-  address: string;
-  rank: number;
-  autoWin: number | null;
-  semiAutoWin: number | null;
-  manualWin: number | null;
-}
-
 export interface MatchResult {
   round: number;
   numbers: number[];

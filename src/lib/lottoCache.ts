@@ -1,5 +1,6 @@
 import { prisma } from "../app";
-import { LottoNumber, OptimizedLottoNumber, LottoStore } from "../types/lotto";
+import { LottoNumber, OptimizedLottoNumber } from "../types/lotto";
+import { LottoStore } from "../types/store";
 
 export const lottoCache = new Map<number, LottoNumber>();
 export const lottoStoreCache: LottoStore[] = [];
@@ -40,7 +41,7 @@ export async function initializeLottoCache() {
     .map(toOptimized)
     .sort((a, b) => a.drwNo - b.drwNo);
 
-  console.log(`>>> 총 ${records.length}개 회차 캐싱 완료`);
+  console.log(`>>> 총 ${records.length}개 회차 당첨번호 캐싱 완료`);
 
   // -----------------------------
   // 2️⃣ LottoStore 캐시 최적화
@@ -69,6 +70,5 @@ export async function initializeLottoCache() {
     regionMap.get(region)!.push(store);
   });
 
-  console.log(`>>> 총 ${storeRecords.length}개 판매점 LottoStore 캐싱 완료`);
-  console.log(`>>> rank별 및 rank+region별 캐시 완료`);
+  console.log(`>>> 총 ${storeRecords.length}개 판매점 캐싱 완료`);
 }

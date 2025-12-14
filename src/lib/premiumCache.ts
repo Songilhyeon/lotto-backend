@@ -98,7 +98,7 @@ export function initializePremiumCache() {
     rec.nextBonusMask = next.bonusMask;
   }
 
-  console.log("[premiumCache] initialized:", premiumCache.size);
+  console.log("initializePremiumCache:", premiumCache.size);
 }
 
 /* ------------------------------------------------------

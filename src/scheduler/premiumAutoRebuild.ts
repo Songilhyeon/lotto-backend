@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { initializePremiumCache, redis } from "../lib/premiumCache";
 import { saveLatestLotto } from "../lib/saveLatestLotto"; // 크롤러 기반으로 수정됨
+import { lottoStoreByRank } from "../lib/lottoCache";
 
 /**
  * KST 기준 최신 로또 회차 계산
@@ -30,13 +31,17 @@ const getLatestRound = (): number => {
 /**
  * Premium 캐시 + DB 갱신 (크롤러 기반)
  */
-async function autoRebuildPremiumCache() {
+export async function autoRebuildPremiumCache() {
   try {
     const latestRound = getLatestRound();
 
     // Redis에 저장된 마지막 회차 확인
     const cachedRound = await redis.get("latestRound");
-    if (cachedRound && Number(cachedRound) === latestRound) {
+    if (
+      cachedRound &&
+      Number(cachedRound) === latestRound &&
+      lottoStoreByRank.has(latestRound)
+    ) {
       console.log(
         `[${new Date().toLocaleString()}] Already latest round (${latestRound}), no rebuild needed.`
       );
@@ -71,10 +76,20 @@ async function autoRebuildPremiumCache() {
  * 매주 토요일 21:00 KST 실행
  */
 export function scheduleWeeklyRebuild() {
-  cron.schedule("0 12 * * 6", async () => {
-    console.log(`[${new Date().toLocaleString()}] Cron job started`);
-    await autoRebuildPremiumCache();
-  });
+  console.log("🚀 scheduleWeeklyRebuild() CALLED");
+  cron.schedule(
+    "30 21 * * 6", // 토요일 21시 30분
+    // "26 13 * * 0", // 일요일 13시 (테스트용)
+    async () => {
+      console.log(
+        `[CRON] Weekly rebuild started: ${new Date().toLocaleString()}`
+      );
+      await autoRebuildPremiumCache();
+    },
+    {
+      timezone: "Asia/Seoul",
+    }
+  );
 
-  console.log("Premium cache cron scheduler started");
+  console.log("✅ scheduleWeeklyRebuild weekly cron registered");
 }

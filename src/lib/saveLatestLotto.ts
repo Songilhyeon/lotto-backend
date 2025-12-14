@@ -2,6 +2,7 @@ import { prisma } from "../app";
 import {
   lottoCache,
   sortedLottoCache,
+  lottoStoreByRank,
   toOptimized,
   lottoStoreCache,
 } from "./lottoCache";
@@ -13,7 +14,7 @@ const getLottoAPI = (round: number | string) =>
 
 export async function saveLatestLotto(round: number) {
   try {
-    if (lottoCache.has(round)) return lottoCache.get(round);
+    if (lottoCache.has(round) && lottoStoreByRank.has(round)) return;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -41,10 +42,10 @@ export async function saveLatestLotto(round: number) {
         drwtNo5: apiData.drwtNo5,
         drwtNo6: apiData.drwtNo6,
         bnusNo: apiData.bnusNo,
-        firstPrzwnerCo: apiData.firstPrzwnerCo ?? "0",
-        firstWinamnt: apiData.firstWinamnt ?? "0",
-        totSellamnt: apiData.totSellamnt ?? "0",
-        firstAccumamnt: apiData.firstAccumamnt ?? "0",
+        firstPrzwnerCo: String(apiData.firstPrzwnerCo ?? "0"),
+        firstWinamnt: String(apiData.firstWinamnt ?? "0"),
+        totSellamnt: String(apiData.totSellamnt ?? "0"),
+        firstAccumamnt: String(apiData.firstAccumamnt ?? "0"),
         autoWin: crawlData?.autoWin ?? 0,
         semiAutoWin: crawlData?.semiAutoWin ?? 0,
         manualWin: crawlData?.manualWin ?? 0,
@@ -59,10 +60,10 @@ export async function saveLatestLotto(round: number) {
         drwtNo5: apiData.drwtNo5,
         drwtNo6: apiData.drwtNo6,
         bnusNo: apiData.bnusNo,
-        firstPrzwnerCo: apiData.firstPrzwnerCo ?? "0",
-        firstWinamnt: apiData.firstWinamnt ?? "0",
-        totSellamnt: apiData.totSellamnt ?? "0",
-        firstAccumamnt: apiData.firstAccumamnt ?? "0",
+        firstPrzwnerCo: String(apiData.firstPrzwnerCo ?? "0"),
+        firstWinamnt: String(apiData.firstWinamnt ?? "0"),
+        totSellamnt: String(apiData.totSellamnt ?? "0"),
+        firstAccumamnt: String(apiData.firstAccumamnt ?? "0"),
         autoWin: crawlData?.autoWin ?? 0,
         semiAutoWin: crawlData?.semiAutoWin ?? 0,
         manualWin: crawlData?.manualWin ?? 0,
