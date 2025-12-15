@@ -2,11 +2,22 @@
 import { analyzePremiumRound } from "./premiumAnalyzer";
 import { computeAiScore } from "./aiScoreCalculator";
 import { normalizeScores } from "../utils/normalizeScore";
+import { sortedLottoCache } from "../lib/lottoCache";
+import { OptimizedLottoNumber } from "../types/lotto";
 
 interface AiRecommendOptions {
   round: number;
   clusterUnit?: number; // 기본값 5
 }
+
+const getNumbers = (item: OptimizedLottoNumber) => [
+  Number(item.drwtNo1),
+  Number(item.drwtNo2),
+  Number(item.drwtNo3),
+  Number(item.drwtNo4),
+  Number(item.drwtNo5),
+  Number(item.drwtNo6),
+];
 
 export async function getAiRecommendation({
   round,
@@ -35,8 +46,21 @@ export async function getAiRecommendation({
     .slice(0, 6)
     .map((s) => s.num);
 
+  // 5) 다음회차 정보
+  const checkNextRound = sortedLottoCache.find(
+    (rec) => round + 1 === rec.drwNo
+  );
+  const nextRound = checkNextRound
+    ? {
+        round: checkNextRound.drwNo,
+        numbers: getNumbers(checkNextRound),
+        bonus: Number(checkNextRound.bnusNo),
+      }
+    : null;
+
   return {
     round,
+    nextRound,
     recommended,
     scores, // 🔥 이제 정규화된 점수 목록
     generatedAt: new Date().toISOString(),

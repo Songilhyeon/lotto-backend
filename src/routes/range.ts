@@ -12,7 +12,7 @@ interface MatchingRoundInfo {
   nextFrequency: Record<number, number>;
 }
 
-/** 단위(7,10)별 분석 데이터 */
+/** 단위(5, 7,10)별 분석 데이터 */
 interface RangeResult {
   counts: Record<string, number>;
   matchingRounds: MatchingRoundInfo[];
@@ -23,7 +23,7 @@ interface RangeResult {
 interface ApiData {
   selectedRound: { round: number; numbers: number[]; bonus: number };
   nextRound: { round: number; numbers: number[]; bonus: number } | null;
-  ranges: { "10": RangeResult; "7": RangeResult };
+  ranges: { "10": RangeResult; "7": RangeResult; "5": RangeResult };
 }
 
 /** 번호 가져오기 */
@@ -180,6 +180,17 @@ router.get("/", (req: Request, res: Response) => {
   );
   const nextFreq7 = accumulateNextFrequencies(matching7);
 
+  /** 5단위 분석 */
+  const counts5 = getRangeCounts(selectedNumbers, 5);
+  const matching5 = findMatchingRounds(
+    counts5,
+    5,
+    searchRounds,
+    includeBonus,
+    tolerance
+  );
+  const nextFreq5 = accumulateNextFrequencies(matching5);
+
   return res.json({
     success: true,
     data: {
@@ -199,6 +210,12 @@ router.get("/", (req: Request, res: Response) => {
           counts: counts7,
           matchingRounds: matching7,
           nextFrequency: nextFreq7,
+        },
+        "5": {
+          // 추가
+          counts: counts5,
+          matchingRounds: matching5,
+          nextFrequency: nextFreq5,
         },
       },
     } satisfies ApiData,

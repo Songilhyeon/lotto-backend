@@ -1,5 +1,7 @@
 // aiRecommenderAdvanced.ts
 import { analyzePremiumRound, PremiumAnalysisResult } from "./premiumAnalyzer";
+import { sortedLottoCache } from "../lib/lottoCache";
+import { OptimizedLottoNumber } from "../types/lotto";
 
 export interface WeightConfig {
   hot: number;
@@ -33,6 +35,11 @@ export interface AiRecommendation {
   details: NumberScoreDetail[];
   scores: NumberScoreDetail[];
   seed: number;
+  nextRound?: {
+    round: number;
+    numbers: number[];
+    bonus: number;
+  } | null;
 }
 
 // -----------------------------
@@ -91,6 +98,15 @@ export const AiPresets: AiPreset[] = [
       nextFreq: 2,
     },
   },
+];
+
+const getNumbers = (item: OptimizedLottoNumber) => [
+  Number(item.drwtNo1),
+  Number(item.drwtNo2),
+  Number(item.drwtNo3),
+  Number(item.drwtNo4),
+  Number(item.drwtNo5),
+  Number(item.drwtNo6),
 ];
 
 // -----------------------------
@@ -159,10 +175,23 @@ export async function getAiRecommendationAdvanced(
 
   const picked = [...scores].sort((a, b) => b.final - a.final).slice(0, 6);
 
+  // 다음회차 정보
+  const checkNextRound = sortedLottoCache.find(
+    (rec) => round + 1 === rec.drwNo
+  );
+  const nextRound = checkNextRound
+    ? {
+        round: checkNextRound.drwNo,
+        numbers: getNumbers(checkNextRound),
+        bonus: Number(checkNextRound.bnusNo),
+      }
+    : null;
+
   return {
     combination: picked.map((p) => p.num),
     details: picked,
     scores,
+    nextRound,
     seed,
   };
 }

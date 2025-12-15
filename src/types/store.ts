@@ -7,3 +7,10 @@ export interface LottoStore {
   semiAutoWin: number | null;
   manualWin: number | null;
 }
+
+export interface StoreHistoryItem {
+  round: number;
+  autoWin: number;
+  semiAutoWin: number;
+  manualWin: number;
+}
