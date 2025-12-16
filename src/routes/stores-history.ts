@@ -23,9 +23,18 @@ router.get("/", (req, res) => {
     }
 
     const storesForRank: LottoStore[] = lottoStoreByRank.get(rankNum) || [];
-    const storeHistory = storesForRank
-      .filter((s) => s.store === store && s.address === address)
-      .sort((a, b) => b.drwNo - a.drwNo) // 최신 회차부터
+
+    // ✅ 1. 먼저 필터링 결과를 변수로 저장
+    const matchedStores = storesForRank.filter(
+      (s) => s.store === store && s.address === address
+    );
+
+    // ✅ 2. 전체 등장 횟수
+    const totalCount = matchedStores.length;
+
+    // ✅ 3. 최근 N회 데이터
+    const storeHistory = matchedStores
+      .sort((a, b) => b.drwNo - a.drwNo)
       .slice(0, limitNum)
       .map((s) => ({
         round: s.drwNo,
@@ -34,7 +43,11 @@ router.get("/", (req, res) => {
         manualWin: s.manualWin ?? 0,
       }));
 
-    res.json(storeHistory);
+    // ✅ 4. 함께 리턴
+    res.json({
+      totalCount,
+      storeHistory,
+    });
   } catch (err) {
     console.error("Error in /api/lotto/stores/history", err);
     res.status(500).json({ error: "Server Error" });
