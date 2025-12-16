@@ -1,3 +1,4 @@
+// routes/auth.ts
 import { Router } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../app";
@@ -7,35 +8,35 @@ import { AuthRequest, auth } from "../middlewares/authMiddleware";
 
 const router = Router();
 
-interface OAuthUser {
-  id: string;
-  email: string | null;
-  name: string | null;
-  avatar: string | null;
-  role?: string;
-  subscriptionExpiresAt?: Date | null;
-}
+const JWT_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000; // 7일
+const isProd = process.env.NODE_ENV === "production";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
-//-----------------------------------------------------------------------------
-// 1) 테스트용 로그인 엔드포인트
-//-----------------------------------------------------------------------------
+//-------------------------------------------
+// 쿠키 설정 helper
+//-------------------------------------------
+const setTokenCookie = (res: any, token: string) => {
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: isProd, // 배포(HTTPS)만 true
+    sameSite: isProd ? "none" : "lax", // cross-site 허용
+    maxAge: JWT_EXPIRES_IN,
+  });
+};
+
+//-------------------------------------------
+// 테스트 로그인 (로컬 / 개발용)
+//-------------------------------------------
 router.post("/test-login", async (req, res) => {
   try {
-    // 1) 이메일 테스트용 지정
     const email = "testuser@example.com";
     const name = "테스트 유저";
-
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 60 * 60 * 1000); // 1시간 후
+    const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
 
-    // 2) 유저 upsert (없으면 생성, 있으면 업데이트)
     const user = await prisma.user.upsert({
       where: { email },
-      update: {
-        name,
-        role: "PREMIUM",
-        subscriptionExpiresAt: expiresAt,
-      },
+      update: { name, role: "PREMIUM", subscriptionExpiresAt: expiresAt },
       create: {
         email,
         name,
@@ -44,7 +45,6 @@ router.post("/test-login", async (req, res) => {
       },
     });
 
-    // 3) JWT 발급
     const jwtToken = jwt.sign(
       {
         id: user.id,
@@ -57,15 +57,7 @@ router.post("/test-login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    const isProd = process.env.NODE_ENV === "production";
-
-    // 4) 쿠키 세팅
-    res.cookie("token", jwtToken, {
-      httpOnly: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      secure: isProd, // 프로덕션(HTTPS)만 true
-      sameSite: isProd ? "none" : "lax", // 로컬 HTTP는 lax
-    });
+    setTokenCookie(res, jwtToken);
 
     res.json({ ok: true, user });
   } catch (err) {
@@ -73,12 +65,13 @@ router.post("/test-login", async (req, res) => {
     res.status(500).json({ ok: false, message: "Test login failed" });
   }
 });
-//-----------------------------------------------------------------------------
 
+//-------------------------------------------
+// 로그인된 사용자 확인
+//-------------------------------------------
 router.get("/me", auth, (req: AuthRequest, res) => {
   if (!req.user) return res.status(401).json({ message: "Not logged in" });
   const user = req.user;
-
   res.json({
     ok: true,
     user: {
@@ -88,46 +81,42 @@ router.get("/me", auth, (req: AuthRequest, res) => {
       role: user.role,
       subscriptionExpiresAt: user.subscriptionExpiresAt,
     },
-    message: `로그인된 사용자 ${user.name} 입니다.`,
   });
 });
 
-// routes/auth.ts
+//-------------------------------------------
+// 로그아웃
+//-------------------------------------------
 router.post("/logout", (req, res) => {
-  const isProd = process.env.NODE_ENV === "production";
-
   res.clearCookie("token", {
     httpOnly: true,
-    secure: isProd, // 프로덕션(HTTPS)만 true
-    sameSite: isProd ? "none" : "lax", // 로컬 HTTP는 lax
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
   });
-  res.json({ message: "Logged out" });
+  res.json({ ok: true, message: "Logged out" });
 });
 
-/**
- * OAuth callback 처리
- */
+//-------------------------------------------
+// OAuth callback 처리
+//-------------------------------------------
 router.get("/callback/:provider", async (req: AuthRequest, res) => {
   const provider = req.params.provider as Provider;
   const { code, state } = req.query;
 
   if (!code || typeof code !== "string")
-    return res.status(400).send("Code is missing");
+    return res.status(400).send("Code missing");
 
   try {
-    // 1) 토큰 교환 + 프로필 가져오기
     const tokenRes = await exchangeCodeForToken(provider, code);
     const profile = await getProfile(provider, tokenRes.access_token);
     const normalized = normalizeProfile(profile);
 
-    // 이메일 없으면 임시 생성
     const userEmail =
       normalized.email || `${provider}-${normalized.id}@${provider}-temp.local`;
 
     if (!normalized.email) normalized.email = userEmail;
 
-    // 2) User upsert
-    let user = await prisma.user.upsert({
+    const user = await prisma.user.upsert({
       where: { email: normalized.email! },
       update: { name: normalized.name, avatar: normalized.avatar ?? null },
       create: {
@@ -137,7 +126,6 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
       },
     });
 
-    // 3) Account upsert
     await prisma.account.upsert({
       where: {
         provider_providerAccountId: {
@@ -154,7 +142,6 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
       },
     });
 
-    // 4) JWT 발급
     const jwtToken = jwt.sign(
       {
         id: user.id,
@@ -167,40 +154,31 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
       { expiresIn: "7d" }
     );
 
-    const isProd = process.env.NODE_ENV === "production";
+    setTokenCookie(res, jwtToken);
 
-    // 4) 쿠키 세팅
-    res.cookie("token", jwtToken, {
-      httpOnly: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      secure: isProd, // 프로덕션(HTTPS)만 true
-      sameSite: isProd ? "none" : "lax", // 로컬 HTTP는 lax
-    });
-
-    // ⭐⭐ redirectUrl 은 state 로 전달됨 (Origin 안 씀)
-    const redirectUrl = decodeURIComponent(
-      (state as string) || "http://localhost:3000"
-    );
-
-    return res.redirect(redirectUrl);
+    // 항상 새로운 state 또는 프론트 URL 사용
+    const redirectUrl =
+      typeof state === "string" ? decodeURIComponent(state) : FRONTEND_URL;
+    res.redirect(redirectUrl);
   } catch (err) {
     console.error(err);
     res.status(500).send("OAuth callback error");
   }
 });
 
-/**
- * OAuth 로그인 URL 생성
- * - catch-all 역할을 하므로 맨 마지막에 위치
- */
+//-------------------------------------------
+// OAuth 로그인 URL 생성
+//-------------------------------------------
 router.get("/:provider", (req, res) => {
   const provider = req.params.provider as Provider;
 
-  // ⭐ 프런트에서 전달한 state (= redirectUrl)
-  const state = typeof req.query.state === "string" ? req.query.state : "";
+  // 항상 새로운 state 전달 (프런트 redirect URL)
+  const state =
+    typeof req.query.state === "string"
+      ? encodeURIComponent(req.query.state)
+      : encodeURIComponent(FRONTEND_URL);
 
   let url = "";
-
   switch (provider) {
     case "google":
       url =
@@ -209,7 +187,7 @@ router.get("/:provider", (req, res) => {
         `&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}` +
         `&response_type=code` +
         `&scope=openid email profile` +
-        `&state=${state}`; // ⭐ redirectUrl 전달
+        `&state=${state}`;
       break;
 
     case "naver":
@@ -219,7 +197,7 @@ router.get("/:provider", (req, res) => {
         `?client_id=${process.env.NAVER_CLIENT_ID}` +
         `&redirect_uri=${redirect}` +
         `&response_type=code` +
-        `&state=${state}`; // ⭐ redirectUrl 전달
+        `&state=${state}`;
       break;
 
     case "kakao":
@@ -228,7 +206,7 @@ router.get("/:provider", (req, res) => {
         `?client_id=${process.env.KAKAO_CLIENT_ID}` +
         `&redirect_uri=${process.env.KAKAO_REDIRECT_URI}` +
         `&response_type=code` +
-        `&state=${state}`; // ⭐ redirectUrl 전달
+        `&state=${state}`;
       break;
 
     default:
