@@ -29,10 +29,13 @@ const visitedIPs = new Set<string>();
 let totalVisits = 0;
 const getToday = () => new Date().toISOString().split("T")[0];
 
+const allowedOrigins = ["http://localhost:3000"];
+if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
+
 // CORS 설정
 app.use(
   cors({
-    origin: ["http://localhost:3000", "https://lotto-data-lab.vercel.app"],
+    origin: allowedOrigins,
     credentials: true,
   })
 );
