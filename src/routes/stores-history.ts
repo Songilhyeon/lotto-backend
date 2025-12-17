@@ -9,45 +9,50 @@ const router = express.Router();
  * query:
  *   - store: string (필수)
  *   - address: string (필수)
- *   - rank: number (1 또는 2, 필수)
- *   - limit: number (최근 N회, 선택, 기본 5)
+ *   - rank?: number (1 또는 2, 선택)
+ *   - limit?: number (최근 N회, 기본 5)
  */
 router.get("/", (req, res) => {
   try {
     const { store, address, rank, limit } = req.query;
-    const rankNum = rank ? Number(rank) : null;
     const limitNum = limit ? Number(limit) : 5;
 
-    if (!store || !address || !rankNum || ![1, 2].includes(rankNum)) {
-      return res.status(400).json({ error: "Invalid query parameters" });
+    if (!store || !address) {
+      return res.status(400).json({ error: "Store and address are required" });
     }
 
-    const storesForRank: LottoStore[] = lottoStoreByRank.get(rankNum) || [];
+    const rankNum = rank ? Number(rank) : null;
+    const ranksToFetch: (1 | 2)[] =
+      rankNum && [1, 2].includes(rankNum) ? [rankNum as 1 | 2] : [1, 2];
 
-    // ✅ 1. 먼저 필터링 결과를 변수로 저장
-    const matchedStores = storesForRank.filter(
-      (s) => s.store === store && s.address === address
-    );
+    const result: Record<number, { totalCount: number; storeHistory: any[] }> =
+      {};
 
-    // ✅ 2. 전체 등장 횟수
-    const totalCount = matchedStores.length;
+    ranksToFetch.forEach((r) => {
+      const storesForRank: LottoStore[] = lottoStoreByRank.get(r) || [];
 
-    // ✅ 3. 최근 N회 데이터
-    const storeHistory = matchedStores
-      .sort((a, b) => b.drwNo - a.drwNo)
-      .slice(0, limitNum)
-      .map((s) => ({
-        round: s.drwNo,
-        autoWin: s.autoWin ?? 0,
-        semiAutoWin: s.semiAutoWin ?? 0,
-        manualWin: s.manualWin ?? 0,
-      }));
+      const matchedStores = storesForRank.filter(
+        (s) => s.store === store && s.address === address
+      );
 
-    // ✅ 4. 함께 리턴
-    res.json({
-      totalCount,
-      storeHistory,
+      const storeHistory = matchedStores
+        .sort((a, b) => b.drwNo - a.drwNo)
+        .slice(0, limitNum)
+        .map((s) => ({
+          rank: r,
+          round: s.drwNo,
+          autoWin: s.autoWin ?? 0,
+          semiAutoWin: s.semiAutoWin ?? 0,
+          manualWin: s.manualWin ?? 0,
+        }));
+
+      result[r] = {
+        totalCount: matchedStores.length,
+        storeHistory,
+      };
     });
+
+    res.json(result);
   } catch (err) {
     console.error("Error in /api/lotto/stores/history", err);
     res.status(500).json({ error: "Server Error" });
