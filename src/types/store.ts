@@ -1,5 +1,6 @@
 export interface LottoStore {
   drwNo: number;
+  drwNoDate?: Date | null; // ✅ Date 유지
   store: string;
   address: string;
   rank: number;
@@ -13,6 +14,7 @@ export interface StoreHistoryItem {
   autoWin: number;
   semiAutoWin: number;
   manualWin: number;
+  drwNoDate: string;
 }
 
 export type StorePatternType =

@@ -40,6 +40,7 @@ router.get("/", (req, res) => {
         .slice(0, limitNum)
         .map((s) => ({
           rank: r,
+          drwNoDate: s.drwNoDate,
           round: s.drwNo,
           autoWin: s.autoWin ?? 0,
           semiAutoWin: s.semiAutoWin ?? 0,

@@ -103,6 +103,7 @@ export async function saveLatestLotto(round: number) {
         // 메모리 캐시 업데이트
         lottoStoreCache.push({
           drwNo: round,
+          drwNoDate: apiData.drwNoDate,
           store: store.store,
           address: store.address,
           rank: store.rank,

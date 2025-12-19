@@ -16,9 +16,11 @@ import authRouter from "./routes/auth";
 import lottoRangeRouter from "./routes/range";
 import lottoPostsRouter from "./routes/posts";
 import lottoPremiumRouter from "./routes/premium";
-import lottoStoresRouter from "./routes/stores";
+import lottoStoresStatisticsRouter from "./routes/stores-statistics";
+import lottoStoresAllRouter from "./routes/stores-all";
 import lottoStoresRoundRouter from "./routes/stores-round";
 import lottoStoresHistoryRouter from "./routes/stores-history";
+import lottoStoresTimelineRouter from "./routes/stores-timeline";
 
 export const app = express();
 
@@ -76,8 +78,10 @@ app.use("/api/lotto/range", lottoRangeRouter);
 app.use("/api/lotto/numberlab", lottoNumberLabRouter);
 app.use("/api/lotto/premium", lottoPremiumRouter);
 app.use("/api/lotto/stores/round", lottoStoresRoundRouter);
-app.use("/api/lotto/stores", lottoStoresRouter);
 app.use("/api/lotto/stores/history", lottoStoresHistoryRouter);
+app.use("/api/lotto/stores/timeline", lottoStoresTimelineRouter);
+app.use("/api/lotto/stores/statistics", lottoStoresStatisticsRouter);
+app.use("/api/lotto/stores/all", lottoStoresAllRouter);
 
 // 기본 라우트
 app.get("/", (req: Request, res: Response) => {

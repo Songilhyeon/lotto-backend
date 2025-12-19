@@ -1,5 +1,5 @@
 import express from "express";
-import { lottoStoreByRank } from "../lib/lottoCache";
+import { lottoStoreByRank, lottoStoreCache } from "../lib/lottoCache";
 import { LottoStore } from "../types/store";
 
 const router = express.Router();

@@ -119,6 +119,7 @@ router.get("/", (req: Request, res: Response) => {
 
   // --- 검색된 모든 회차의 nextNumbers 합쳐서 빈도 계산 ---
   const frequency: Record<number, number> = {};
+  for (let i = 1; i <= 45; i++) frequency[i] = 0;
   allResults.forEach((r) => {
     r.nextNumbers.forEach((n) => {
       frequency[n] = (frequency[n] || 0) + 1;
