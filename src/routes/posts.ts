@@ -15,20 +15,38 @@ const clean = (value: string) =>
   });
 
 // ----------------------------------------
-// 1) 게시글 목록
+// 1) 게시글 목록 (페이지네이션)
 // ----------------------------------------
 router.get("/", async (req, res) => {
-  const posts = await prisma.post.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      title: true,
-      createdAt: true,
-      user: { select: { name: true } },
-    },
-  });
+  const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+  const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
 
-  res.json({ posts });
+  const skip = (page - 1) * limit;
+
+  const [posts, totalCount] = await Promise.all([
+    prisma.post.findMany({
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        createdAt: true,
+        user: { select: { name: true } },
+      },
+    }),
+    prisma.post.count(),
+  ]);
+
+  const totalPages = Math.ceil(totalCount / limit);
+
+  res.json({
+    posts,
+    page,
+    totalPages,
+    totalCount,
+  });
 });
 
 // ----------------------------------------
