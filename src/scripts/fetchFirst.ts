@@ -31,6 +31,7 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
         "--disable-dev-shm-usage",
         "--disable-gpu",
         "--no-zygote",
+        "--single-process",
       ],
     });
 
@@ -48,9 +49,12 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
     });
 
     await page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: 30000,
+      waitUntil: "networkidle2", // ⭐ 핵심
+      timeout: 60000,
     });
+
+    // ⏳ 봇 탐지 완화용 짧은 딜레이
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // 팝업 처리 (있을 때만)
     try {
@@ -59,40 +63,39 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
       });
       await page.waitForFunction(
         () => !document.querySelector("div.popup.conn_wait_pop"),
-        { timeout: 300000 }
+        { timeout: 10000 }
       );
     } catch {
       /* noop */
     }
 
-    // ⭐ 1등 테이블 로딩 보장
-    await page.waitForFunction(
-      () =>
-        Array.from(
-          document.querySelectorAll("div.group_content h4.title")
-        ).some((el) => el.textContent?.trim() === "1등 배출점"),
-      { timeout: 10000 }
-    );
-
-    // --- 1등 크롤링 ---
+    // --- 1등 크롤링 (기다리지 않고 바로) ---
     const firstPrizeStores: LottoStoreInfo[] = await page.evaluate(() => {
-      const table = Array.from(document.querySelectorAll("div.group_content"))
-        .find(
-          (div) =>
-            div.querySelector("h4.title")?.textContent?.trim() === "1등 배출점"
-        )
-        ?.querySelector("table.tbl_data.tbl_data_col");
+      const groupContents = Array.from(
+        document.querySelectorAll("div.group_content")
+      );
 
+      const firstGroup = groupContents.find(
+        (div) =>
+          div.querySelector("h4.title")?.textContent?.trim() === "1등 배출점"
+      );
+
+      if (!firstGroup) return [];
+
+      const table = firstGroup.querySelector("table.tbl_data.tbl_data_col");
       if (!table) return [];
 
       const storeMap: Record<string, LottoStoreInfo> = {};
 
       Array.from(table.querySelectorAll("tbody tr")).forEach((tr) => {
         const tds = tr.querySelectorAll("td");
+        if (tds.length < 4) return;
 
         const store = tds[1]?.textContent?.trim() || "";
         const address = tds[3]?.textContent?.trim() || "";
         const typeText = tds[2]?.textContent?.trim() || "";
+
+        if (!store || !address) return;
 
         const key = `${store}|${address}`;
 
