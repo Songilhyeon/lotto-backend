@@ -21,6 +21,7 @@ import lottoStoresAllRouter from "./routes/stores-all";
 import lottoStoresRoundRouter from "./routes/stores-round";
 import lottoStoresHistoryRouter from "./routes/stores-history";
 import lottoStoresTimelineRouter from "./routes/stores-timeline";
+import subscriptionRouter from "./routes/subscription";
 
 export const app = express();
 
@@ -69,6 +70,7 @@ app.get("/api/visit", (req: Request, res: Response) => {
 // 라우터 등록
 app.use("/api/auth", authRouter);
 app.use("/api/posts", lottoPostsRouter);
+app.use("/api/subscribe", subscriptionRouter);
 app.use("/api/lotto/round", lottoGetRoundRouter);
 app.use("/api/lotto/rounds", lottoGetRoundsRouter);
 app.use("/api/lotto/frequency", lottoFrequency);

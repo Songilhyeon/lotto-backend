@@ -10,8 +10,6 @@ node_modules
 # production
 /build
 
-/src/scripts
-
 # misc
 .DS_Store
 *.pem

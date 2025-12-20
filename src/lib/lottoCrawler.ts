@@ -28,15 +28,22 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
     });
     const page = await browser.newPage();
 
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+        "AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/120.0.0.0 Safari/537.36"
+    );
+
     await page.setExtraHTTPHeaders({
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
       Referer:
         "https://www.dhlottery.co.kr/store.do?method=topStore&pageGubun=L645",
     });
 
     // await page.goto(url, { waitUntil: "networkidle0" });
-    await page.goto(url, { waitUntil: "domcontentloaded" });
+    await page.goto(url, {
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
+    });
 
     // 팝업 처리
     try {
@@ -135,6 +142,7 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
         const nextLink = Array.from(pageBox.querySelectorAll("a")).find((a) =>
           a.getAttribute("onclick")?.includes(`selfSubmit(${pageNum + 1})`)
         );
+
         if (nextLink) {
           (nextLink as HTMLElement).click();
           return true;
@@ -144,7 +152,18 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
 
       if (hasNextPage) {
         currentPage++;
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // 페이지 로딩 대기
+
+        // ⭐ 핵심: 페이지 이동 후 테이블 다시 등장할 때까지 대기
+        await page.waitForFunction(
+          () => {
+            const title = Array.from(
+              document.querySelectorAll("div.group_content h4.title")
+            ).find((el) => el.textContent?.trim() === "2등 배출점");
+
+            return !!title;
+          },
+          { timeout: 10000 }
+        );
       }
     }
 
