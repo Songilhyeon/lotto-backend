@@ -25,41 +25,40 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
     const url = `https://www.dhlottery.co.kr/store.do?method=topStore&pageGubun=L645&drwNo=${round}`;
     const isProd = process.env.NODE_ENV === "production";
 
+    // 🔥 Chromium 경로 찾기
+    const findChromiumPath = () => {
+      const paths = [
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
+        "/usr/bin/google-chrome",
+        "/snap/bin/chromium",
+      ];
+      const fs = require("fs");
+      for (const path of paths) {
+        if (fs.existsSync(path)) return path;
+      }
+      return undefined;
+    };
+
     browser = await puppeteer.launch({
       headless: true,
+      executablePath: isProd ? findChromiumPath() : undefined,
       args: isProd
         ? [
             "--no-sandbox",
             "--disable-setuid-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
-            "--disable-accelerated-2d-canvas",
-            "--no-first-run",
             "--no-zygote",
             "--single-process",
-            "--disable-background-networking",
-            "--disable-default-apps",
-            "--disable-extensions",
-            "--disable-sync",
-            "--metrics-recording-only",
-            "--mute-audio",
+            "--disable-dev-tools",
           ]
         : [],
-      // 타임아웃 설정 추가
-      protocolTimeout: 120000,
     });
+
+    console.log(`[INFO][${round}] Browser launched successfully`);
 
     const page = await browser.newPage();
-
-    // 메모리 절약: 불필요한 리소스 차단
-    await page.setRequestInterception(true);
-    page.on("request", (req) => {
-      if (["image", "stylesheet", "font"].includes(req.resourceType())) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
 
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -67,19 +66,24 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
         "Chrome/120.0.0.0 Safari/537.36"
     );
 
+    await page.setExtraHTTPHeaders({
+      Referer:
+        "https://www.dhlottery.co.kr/store.do?method=topStore&pageGubun=L645",
+      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    });
+
+    console.log(`[INFO][${round}] Navigating to ${url}`);
+
     await page.goto(url, {
-      waitUntil: "domcontentloaded", // 변경
-      timeout: 90000, // 연장
+      waitUntil: "networkidle2",
+      timeout: 60000,
     });
 
-    // 핵심 요소 대기
-    await page.waitForSelector("div.group_content", {
-      timeout: 30000,
-    });
+    console.log(`[INFO][${round}] Page loaded`);
 
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 1500));
 
-    // ⏳ 접속 대기 팝업 있으면 제거
+    // 접속 대기 팝업 처리
     try {
       await page.waitForSelector("div.popup.conn_wait_pop", { timeout: 1000 });
       await page.waitForFunction(
@@ -90,7 +94,6 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
       /* popup 없으면 무시 */
     }
 
-    // 🔎 DEBUG: EC2 DOM 확인용 (문제 해결 후 지워도 됨)
     const titles = await page.evaluate(() =>
       Array.from(document.querySelectorAll("h4.title")).map((el) =>
         el.textContent?.replace(/\s+/g, " ").trim()
