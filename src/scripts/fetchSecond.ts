@@ -56,20 +56,18 @@ export async function fetchLottoStores(
 
     const page = await browser.newPage();
 
-    // 🔥 Request Interception으로 모바일 리다이렉트 차단
+    // Request Interception
     await page.setRequestInterception(true);
 
     page.on("request", (request) => {
       const requestUrl = request.url();
 
-      // 모바일 사이트로 가는 요청 차단
       if (requestUrl.includes("m.dhlottery.co.kr")) {
         console.log(`[BLOCK] Mobile redirect blocked: ${requestUrl}`);
         request.abort();
         return;
       }
 
-      // 불필요한 리소스 차단 (속도 향상)
       if (
         ["image", "stylesheet", "font", "media"].includes(
           request.resourceType()
@@ -82,14 +80,12 @@ export async function fetchLottoStores(
       request.continue();
     });
 
-    // Viewport 설정
     await page.setViewport({
       width: 1920,
       height: 1080,
       deviceScaleFactor: 1,
     });
 
-    // 자동화 감지 우회
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, "webdriver", {
         get: () => false,
@@ -108,14 +104,12 @@ export async function fetchLottoStores(
       };
     });
 
-    // User-Agent 설정
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
         "AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/120.0.0.0 Safari/537.36"
     );
 
-    // Headers 설정
     await page.setExtraHTTPHeaders({
       Accept:
         "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -135,17 +129,15 @@ export async function fetchLottoStores(
     const currentUrl = page.url();
     console.log(`[INFO][${round}] Page loaded, URL: ${currentUrl} (2등)`);
 
-    // 리다이렉트 체크
     if (currentUrl.includes("m.dhlottery")) {
       console.log(`[ERROR][${round}] Mobile redirect occurred! (2등)`);
       return [];
     }
 
-    // 충분한 대기 시간
     console.log(`[INFO][${round}] Waiting for content to render... (2등)`);
     await new Promise((r) => setTimeout(r, 5000));
 
-    // 접속 대기 팝업 처리
+    // 팝업 처리
     try {
       const popupExists = await page.evaluate(() => {
         return !!document.querySelector("div.popup.conn_wait_pop");
@@ -183,12 +175,25 @@ export async function fetchLottoStores(
       console.log(`[INFO][${round}] Processing page ${p}/${maxPages} (2등)`);
 
       if (p > 1) {
-        await page.evaluate((pageNum) => {
-          // @ts-ignore
-          selfSubmit(pageNum);
-        }, p);
+        // 🔥 개선: navigate 대신 waitForNavigation 사용
+        const [response] = await Promise.all([
+          page.waitForNavigation({
+            waitUntil: "domcontentloaded",
+            timeout: 30000,
+          }),
+          page.evaluate((pageNum) => {
+            // @ts-ignore
+            if (typeof selfSubmit === "function") {
+              // @ts-ignore
+              selfSubmit(pageNum);
+            }
+          }, p),
+        ]);
 
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // 대기 시간 증가
+        console.log(`[INFO][${round}] Page ${p} loaded`);
+
+        // 추가 대기
+        await new Promise((resolve) => setTimeout(resolve, 3000));
       }
 
       // 페이지 내 2등 테이블 가져오기
@@ -214,7 +219,7 @@ export async function fetchLottoStores(
                   rank: 2,
                   store,
                   address,
-                  autoWin: 1, // 한 페이지 당 1개씩
+                  autoWin: 1,
                 });
               }
             });
