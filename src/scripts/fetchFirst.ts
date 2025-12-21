@@ -17,7 +17,6 @@ export interface LottoResult {
   semiAutoWin: number;
   manualWin: number;
 }
-
 export async function fetchLottoStores(round: number): Promise<LottoResult> {
   let browser: Browser | null = null;
 
@@ -50,6 +49,11 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
             "--disable-gpu",
             "--no-zygote",
             "--single-process",
+            // 🔥 차단 해제
+            "--disable-web-security",
+            "--disable-features=IsolateOrigins,site-per-process",
+            "--allow-running-insecure-content",
+            "--disable-blink-features=AutomationControlled",
           ]
         : [],
     });
@@ -58,6 +62,34 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
 
     const page = await browser.newPage();
 
+    // await page.setBypassCSP(true);
+
+    // 🔥 데스크톱 해상도
+    await page.setViewport({
+      width: 1920,
+      height: 1080,
+      deviceScaleFactor: 1,
+    });
+
+    // 🔥 자동화 감지 우회
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, "webdriver", {
+        get: () => false,
+      });
+
+      (window as any).chrome = {
+        runtime: {},
+      };
+
+      const originalQuery = window.navigator.permissions.query;
+      window.navigator.permissions.query = (parameters: any) =>
+        parameters.name === "notifications"
+          ? Promise.resolve({
+              state: Notification.permission,
+            } as PermissionStatus)
+          : originalQuery(parameters);
+    });
+
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
         "AppleWebKit/537.36 (KHTML, like Gecko) " +
@@ -65,40 +97,40 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
     );
 
     await page.setExtraHTTPHeaders({
-      Referer:
-        "https://www.dhlottery.co.kr/store.do?method=topStore&pageGubun=L645",
+      Referer: "https://www.dhlottery.co.kr/",
       "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Encoding": "gzip, deflate, br",
+      Connection: "keep-alive",
+      "Upgrade-Insecure-Requests": "1",
     });
 
     console.log(`[INFO][${round}] Navigating to ${url}`);
 
     await page.goto(url, {
-      waitUntil: "domcontentloaded", // ⚠️ networkidle2 → domcontentloaded로 변경
+      waitUntil: "load",
       timeout: 60000,
     });
 
-    console.log(`[INFO][${round}] Waiting 5 seconds for content to render...`);
-    await new Promise((r) => setTimeout(r, 5000)); // 🔥 무조건 5초 대기
+    console.log(`[INFO][${round}] Page loaded, URL: ${page.url()}`);
 
-    // 🔥 접속 대기 팝업 먼저 처리
+    // 🔥 5초 대기
+    await new Promise((r) => setTimeout(r, 5000));
+
+    // 접속 대기 팝업 처리
     try {
       await page.waitForSelector("div.popup.conn_wait_pop", { timeout: 2000 });
-      console.log(
-        `[INFO][${round}] 접속 대기 팝업 감지됨, 사라질 때까지 대기...`
-      );
+      console.log(`[INFO][${round}] 접속 대기 팝업 감지`);
       await page.waitForFunction(
         () => !document.querySelector("div.popup.conn_wait_pop"),
         { timeout: 30000 }
       );
-      console.log(`[INFO][${round}] 접속 대기 팝업 사라짐`);
     } catch {
       console.log(`[INFO][${round}] 접속 대기 팝업 없음`);
     }
 
-    // 🔥 추가 대기 시간
-    await new Promise((r) => setTimeout(r, 3000));
-
-    // 🔥 h4.title이 나타날 때까지 기다리기 (최대 20초)
+    // h4.title이 나타날 때까지 기다리기
     try {
       await page.waitForFunction(
         () => {
@@ -111,7 +143,13 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
     } catch (err) {
       console.log(`[WARN][${round}] h4.title not found after 20s`);
 
-      // 🔍 디버깅: HTML 확인
+      const currentUrl = page.url();
+      console.log(`[DEBUG][${round}] Current URL:`, currentUrl);
+
+      if (currentUrl.includes("m.dhlottery")) {
+        console.log(`[ERROR][${round}] Redirected to mobile site!`);
+      }
+
       const html = await page.content();
       console.log(`[DEBUG][${round}] HTML length:`, html.length);
       console.log(`[DEBUG][${round}] HTML preview:`, html.substring(0, 500));
@@ -125,11 +163,8 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
     console.log(`[DEBUG][${round}] titles:`, titles);
 
     if (titles.length === 0) {
-      console.log(
-        `[WARN][${round}] No titles found, content may not be loaded`
-      );
+      console.log(`[WARN][${round}] No titles found`);
 
-      // 🔍 추가 디버깅
       const bodyText = await page.evaluate(() => document.body.innerText);
       console.log(`[DEBUG][${round}] Body text:`, bodyText.substring(0, 300));
 
