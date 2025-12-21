@@ -225,12 +225,52 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
     console.log(`[INFO][${round}] Crawling 2등...`);
 
     const secondPrizeStoresMap: Record<string, LottoStoreInfo> = {};
-    let hasNextPage = true;
-    let currentPage = 1;
 
-    while (hasNextPage) {
-      console.log(`[INFO][${round}] Processing 2등 page ${currentPage}`);
+    // 페이지네이션 확인
+    const maxPages = await page.evaluate(() => {
+      const pageBox = document.querySelector("div.paginate_common");
+      if (!pageBox) return 1;
+      const pages = Array.from(pageBox.querySelectorAll("a"))
+        .map((a) => Number(a.textContent?.trim()))
+        .filter((n) => !isNaN(n));
+      return pages.length > 0 ? Math.max(...pages) : 1;
+    });
 
+    console.log(`[INFO][${round}] 2등 페이지 수: ${maxPages}`);
+
+    for (let p = 1; p <= maxPages; p++) {
+      console.log(`[INFO][${round}] Processing 2등 page ${p}/${maxPages}`);
+
+      if (p > 1) {
+        // 🔥 개선: waitForNavigation 사용
+        try {
+          await Promise.all([
+            page.waitForNavigation({
+              waitUntil: "domcontentloaded",
+              timeout: 30000,
+            }),
+            page.evaluate((pageNum) => {
+              // @ts-ignore
+              if (typeof selfSubmit === "function") {
+                // @ts-ignore
+                selfSubmit(pageNum);
+              }
+            }, p),
+          ]);
+
+          console.log(`[INFO][${round}] Page ${p} loaded`);
+
+          // 추가 대기
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        } catch (err) {
+          console.log(
+            `[WARN][${round}] Failed to navigate to page ${p}, breaking loop`
+          );
+          break;
+        }
+      }
+
+      // 페이지 내 2등 테이블 가져오기
       const storesOnPage: LottoStoreInfo[] = await page.evaluate(() => {
         const group = Array.from(
           document.querySelectorAll("div.group_content")
@@ -254,7 +294,7 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
       });
 
       console.log(
-        `[INFO][${round}] Page ${currentPage} found ${storesOnPage.length} 2등 stores`
+        `[INFO][${round}] Page ${p} found ${storesOnPage.length} 2등 stores`
       );
 
       // 중복 업체 autoWin 누적
@@ -264,47 +304,6 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
           secondPrizeStoresMap[key].autoWin! += 1;
         } else {
           secondPrizeStoresMap[key] = store;
-        }
-      }
-
-      // 다음 페이지 존재 여부 확인
-      hasNextPage = await page.evaluate((pageNum) => {
-        const pageBox = document.getElementById("page_box");
-        if (!pageBox) return false;
-
-        const nextLink = Array.from(pageBox.querySelectorAll("a")).find((a) =>
-          a.getAttribute("onclick")?.includes(`selfSubmit(${pageNum + 1})`)
-        );
-
-        if (nextLink) {
-          (nextLink as HTMLElement).click();
-          return true;
-        }
-        return false;
-      }, currentPage);
-
-      if (hasNextPage) {
-        currentPage++;
-
-        // 페이지 이동 후 테이블 다시 등장할 때까지 대기
-        try {
-          await page.waitForFunction(
-            () => {
-              const title = Array.from(
-                document.querySelectorAll("div.group_content h4.title")
-              ).find((el) => el.textContent?.trim()?.includes("2등"));
-              return !!title;
-            },
-            { timeout: 15000 }
-          );
-
-          // 추가 안정성 대기
-          await new Promise((r) => setTimeout(r, 1000));
-        } catch (err) {
-          console.log(
-            `[WARN][${round}] Timeout waiting for page ${currentPage}, breaking loop`
-          );
-          hasNextPage = false;
         }
       }
     }

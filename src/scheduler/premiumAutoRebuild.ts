@@ -78,8 +78,8 @@ export async function autoRebuildPremiumCache() {
 export function scheduleWeeklyRebuild() {
   console.log("🚀 scheduleWeeklyRebuild() CALLED");
   cron.schedule(
-    "30 21 * * 6", // 토요일 21시 30분
-    // "26 13 * * 0", // 일요일 13시 (테스트용)
+    // "30 21 * * 6", // 토요일 21시 30분
+    "37 18 * * 0", // 일요일 18시40분 (테스트용)
     async () => {
       console.log(
         `[CRON] Weekly rebuild started: ${new Date().toLocaleString()}`
