@@ -25,7 +25,6 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
     const url = `https://www.dhlottery.co.kr/store.do?method=topStore&pageGubun=L645&drwNo=${round}`;
     const isProd = process.env.NODE_ENV === "production";
 
-    // 🔥 Chromium 경로 찾기
     const findChromiumPath = () => {
       const paths = [
         "/usr/bin/chromium-browser",
@@ -51,7 +50,6 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
             "--disable-gpu",
             "--no-zygote",
             "--single-process",
-            "--disable-dev-tools",
           ]
         : [],
     });
@@ -75,23 +73,48 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
     console.log(`[INFO][${round}] Navigating to ${url}`);
 
     await page.goto(url, {
-      waitUntil: "networkidle2",
+      waitUntil: "domcontentloaded", // ⚠️ networkidle2 → domcontentloaded로 변경
       timeout: 60000,
     });
 
-    console.log(`[INFO][${round}] Page loaded`);
+    console.log(`[INFO][${round}] Waiting 5 seconds for content to render...`);
+    await new Promise((r) => setTimeout(r, 5000)); // 🔥 무조건 5초 대기
 
-    await new Promise((r) => setTimeout(r, 1500));
-
-    // 접속 대기 팝업 처리
+    // 🔥 접속 대기 팝업 먼저 처리
     try {
-      await page.waitForSelector("div.popup.conn_wait_pop", { timeout: 1000 });
+      await page.waitForSelector("div.popup.conn_wait_pop", { timeout: 2000 });
+      console.log(
+        `[INFO][${round}] 접속 대기 팝업 감지됨, 사라질 때까지 대기...`
+      );
       await page.waitForFunction(
         () => !document.querySelector("div.popup.conn_wait_pop"),
-        { timeout: 10000 }
+        { timeout: 30000 }
       );
+      console.log(`[INFO][${round}] 접속 대기 팝업 사라짐`);
     } catch {
-      /* popup 없으면 무시 */
+      console.log(`[INFO][${round}] 접속 대기 팝업 없음`);
+    }
+
+    // 🔥 추가 대기 시간
+    await new Promise((r) => setTimeout(r, 3000));
+
+    // 🔥 h4.title이 나타날 때까지 기다리기 (최대 20초)
+    try {
+      await page.waitForFunction(
+        () => {
+          const titles = document.querySelectorAll("h4.title");
+          return titles.length > 0;
+        },
+        { timeout: 20000 }
+      );
+      console.log(`[INFO][${round}] Content rendered`);
+    } catch (err) {
+      console.log(`[WARN][${round}] h4.title not found after 20s`);
+
+      // 🔍 디버깅: HTML 확인
+      const html = await page.content();
+      console.log(`[DEBUG][${round}] HTML length:`, html.length);
+      console.log(`[DEBUG][${round}] HTML preview:`, html.substring(0, 500));
     }
 
     const titles = await page.evaluate(() =>
@@ -100,6 +123,24 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
       )
     );
     console.log(`[DEBUG][${round}] titles:`, titles);
+
+    if (titles.length === 0) {
+      console.log(
+        `[WARN][${round}] No titles found, content may not be loaded`
+      );
+
+      // 🔍 추가 디버깅
+      const bodyText = await page.evaluate(() => document.body.innerText);
+      console.log(`[DEBUG][${round}] Body text:`, bodyText.substring(0, 300));
+
+      return {
+        round,
+        stores: [],
+        autoWin: 0,
+        semiAutoWin: 0,
+        manualWin: 0,
+      };
+    }
 
     const firstPrizeStores: LottoStoreInfo[] = await page.evaluate(() => {
       const group = Array.from(
@@ -164,6 +205,8 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
       0
     );
 
+    console.log(`[INFO][${round}] Found ${firstPrizeStores.length} stores`);
+
     return {
       round,
       stores: firstPrizeStores,
@@ -171,8 +214,8 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
       semiAutoWin,
       manualWin,
     };
-  } catch (err) {
-    console.error(`❌ 회차 ${round} 실패:`, err);
+  } catch (err: any) {
+    console.error(`❌ 회차 ${round} 실패:`, err.message);
     return {
       round,
       stores: [],
@@ -181,10 +224,6 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
       manualWin: 0,
     };
   } finally {
-    if (browser) {
-      await browser.close();
-      // 메모리 정리 시간 확보
-      await new Promise((r) => setTimeout(r, 1000));
-    }
+    if (browser) await browser.close();
   }
 }
