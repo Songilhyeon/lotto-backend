@@ -1,4 +1,5 @@
 import puppeteer from "puppeteer";
+import type { Browser } from "puppeteer";
 
 export interface LottoStoreInfo {
   rank: number;
@@ -18,29 +19,31 @@ export interface LottoResult {
 }
 
 export async function fetchLottoStores(round: number): Promise<LottoResult> {
-  let browser;
+  let browser: Browser | null = null;
 
   try {
     const url = `https://www.dhlottery.co.kr/store.do?method=topStore&pageGubun=L645&drwNo=${round}`;
 
+    const isProd = process.env.NODE_ENV === "production";
+
     browser = await puppeteer.launch({
       headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--no-zygote",
-        "--single-process",
-      ],
+      args: isProd
+        ? [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--no-zygote",
+            "--single-process",
+          ]
+        : [],
     });
 
     const page = await browser.newPage();
 
     await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-        "AppleWebKit/537.36 (KHTML, like Gecko) " +
-        "Chrome/120.0.0.0 Safari/537.36"
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
 
     await page.setExtraHTTPHeaders({
@@ -49,40 +52,32 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
     });
 
     await page.goto(url, {
-      waitUntil: "networkidle2", // ⭐ 핵심
+      waitUntil: "networkidle2",
       timeout: 60000,
     });
 
-    // ⏳ 봇 탐지 완화용 짧은 딜레이
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((r) => setTimeout(r, 1500));
 
-    // 팝업 처리 (있을 때만)
+    // 팝업 있으면 대기
     try {
-      await page.waitForSelector("div.popup.conn_wait_pop", {
-        timeout: 1000,
-      });
+      await page.waitForSelector("div.popup.conn_wait_pop", { timeout: 1000 });
       await page.waitForFunction(
         () => !document.querySelector("div.popup.conn_wait_pop"),
         { timeout: 10000 }
       );
-    } catch {
-      /* noop */
-    }
+    } catch {}
 
-    // --- 1등 크롤링 (기다리지 않고 바로) ---
     const firstPrizeStores: LottoStoreInfo[] = await page.evaluate(() => {
-      const groupContents = Array.from(
+      const group = Array.from(
         document.querySelectorAll("div.group_content")
-      );
-
-      const firstGroup = groupContents.find(
+      ).find(
         (div) =>
           div.querySelector("h4.title")?.textContent?.trim() === "1등 배출점"
       );
 
-      if (!firstGroup) return [];
+      if (!group) return [];
 
-      const table = firstGroup.querySelector("table.tbl_data.tbl_data_col");
+      const table = group.querySelector("table.tbl_data.tbl_data_col");
       if (!table) return [];
 
       const storeMap: Record<string, LottoStoreInfo> = {};
@@ -91,9 +86,9 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
         const tds = tr.querySelectorAll("td");
         if (tds.length < 4) return;
 
-        const store = tds[1]?.textContent?.trim() || "";
-        const address = tds[3]?.textContent?.trim() || "";
-        const typeText = tds[2]?.textContent?.trim() || "";
+        const store = tds[1]?.textContent?.trim();
+        const typeText = tds[2]?.textContent?.trim() ?? "";
+        const address = tds[3]?.textContent?.trim();
 
         if (!store || !address) return;
 
@@ -110,26 +105,21 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
           };
         }
 
-        if (typeText.includes("자동")) storeMap[key].autoWin! += 1;
-        if (typeText.includes("반자동")) storeMap[key].semiAutoWin! += 1;
-        if (typeText.includes("수동")) storeMap[key].manualWin! += 1;
+        if (typeText.includes("자동")) storeMap[key].autoWin!++;
+        if (typeText.includes("반자동")) storeMap[key].semiAutoWin!++;
+        if (typeText.includes("수동")) storeMap[key].manualWin!++;
       });
 
       return Object.values(storeMap);
     });
 
-    await browser.close();
-
-    const autoWin = firstPrizeStores.reduce(
-      (sum, s) => sum + (s.autoWin || 0),
-      0
-    );
+    const autoWin = firstPrizeStores.reduce((s, v) => s + (v.autoWin ?? 0), 0);
     const semiAutoWin = firstPrizeStores.reduce(
-      (sum, s) => sum + (s.semiAutoWin || 0),
+      (s, v) => s + (v.semiAutoWin ?? 0),
       0
     );
     const manualWin = firstPrizeStores.reduce(
-      (sum, s) => sum + (s.manualWin || 0),
+      (s, v) => s + (v.manualWin ?? 0),
       0
     );
 
@@ -142,8 +132,6 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
     };
   } catch (err) {
     console.error(`❌ 회차 ${round} 1등 판매점 수집 실패`, err);
-    if (browser) await browser.close();
-
     return {
       round,
       stores: [],
@@ -151,5 +139,7 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
       semiAutoWin: 0,
       manualWin: 0,
     };
+  } finally {
+    if (browser) await browser.close();
   }
 }
