@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { sortedLottoCache } from "../lib/lottoCache";
 import { OptimizedLottoNumber } from "../types/lotto";
 import { ApiResponse } from "../types/api";
+import { buildNextRoundPreviewSummary } from "../lib/nextRoundSummary";
 
 const router = Router();
 
@@ -37,6 +38,7 @@ router.get("/", (req: Request, res: Response) => {
   const endRaw = Number(req.query.end);
   const minMatch = Number(req.query.minMatch) || 4;
   const includeBonus = req.query.includeBonus === "true";
+  const previewOnly = req.query.preview === "true";
 
   // --- parameter 검증 ---
   if (Number.isNaN(start) || Number.isNaN(endRaw)) {
@@ -142,6 +144,21 @@ router.get("/", (req: Request, res: Response) => {
         bonus: checkNextRound.bnusNo,
       }
     : null;
+
+  if (previewOnly) {
+    const summary = buildNextRoundPreviewSummary({
+      start,
+      end,
+      minMatch,
+      resultsCount: results.length,
+      nextFrequency: frequency,
+    });
+
+    return res.json({
+      success: true,
+      data: summary,
+    });
+  }
 
   return res.json({
     success: true,
