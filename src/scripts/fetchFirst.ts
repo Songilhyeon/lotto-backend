@@ -33,13 +33,33 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
             "--disable-setuid-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
+            "--disable-accelerated-2d-canvas",
+            "--no-first-run",
             "--no-zygote",
             "--single-process",
+            "--disable-background-networking",
+            "--disable-default-apps",
+            "--disable-extensions",
+            "--disable-sync",
+            "--metrics-recording-only",
+            "--mute-audio",
           ]
         : [],
+      // 타임아웃 설정 추가
+      protocolTimeout: 120000,
     });
 
     const page = await browser.newPage();
+
+    // 메모리 절약: 불필요한 리소스 차단
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+      if (["image", "stylesheet", "font"].includes(req.resourceType())) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
 
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -47,19 +67,17 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
         "Chrome/120.0.0.0 Safari/537.36"
     );
 
-    await page.setExtraHTTPHeaders({
-      Referer:
-        "https://www.dhlottery.co.kr/store.do?method=topStore&pageGubun=L645",
-      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-    });
-
     await page.goto(url, {
-      waitUntil: "networkidle2",
-      timeout: 60000,
+      waitUntil: "domcontentloaded", // 변경
+      timeout: 90000, // 연장
     });
 
-    // ⏳ 서버 환경 안정용 딜레이
-    await new Promise((r) => setTimeout(r, 1500));
+    // 핵심 요소 대기
+    await page.waitForSelector("div.group_content", {
+      timeout: 30000,
+    });
+
+    await new Promise((r) => setTimeout(r, 2000));
 
     // ⏳ 접속 대기 팝업 있으면 제거
     try {
@@ -151,7 +169,7 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
       manualWin,
     };
   } catch (err) {
-    console.error(`❌ 회차 ${round} 1등 판매점 수집 실패`, err);
+    console.error(`❌ 회차 ${round} 실패:`, err);
     return {
       round,
       stores: [],
@@ -160,6 +178,10 @@ export async function fetchLottoStores(round: number): Promise<LottoResult> {
       manualWin: 0,
     };
   } finally {
-    if (browser) await browser.close();
+    if (browser) {
+      await browser.close();
+      // 메모리 정리 시간 확보
+      await new Promise((r) => setTimeout(r, 1000));
+    }
   }
 }
