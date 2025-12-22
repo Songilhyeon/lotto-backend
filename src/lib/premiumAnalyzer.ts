@@ -27,6 +27,11 @@ export interface PremiumAnalysisResult {
   // 이미 존재하는 다음 회차 정보(있다면)
   nextRound: NextRoundObj | null;
   generatedAt: string;
+  oddEvenNextFreq: {
+    odd: number;
+    even: number;
+    ratio: number; // odd / (odd + even)
+  };
 }
 
 type NextRoundObj = {
@@ -153,6 +158,20 @@ function computePatternNext(
   }
 
   return freq;
+}
+
+// 홀짝 카운트
+function countOddEven(numbers: number[]) {
+  let odd = 0;
+  let even = 0;
+
+  for (const n of numbers) {
+    if (!isValidNumber(n)) continue;
+    if (n % 2 === 0) even++;
+    else odd++;
+  }
+
+  return { odd, even };
 }
 
 // ----------------------------------
@@ -297,6 +316,39 @@ export async function analyzePremiumRound(
     : null;
 
   // -----------------------------------
+  // 홀짝 패턴 기반 다음 회차 빈도
+  // -----------------------------------
+  const targetOddEven = countOddEven(target.numbers);
+
+  let oddNext = 0;
+  let evenNext = 0;
+  let matchedCount = 0;
+
+  for (const r of rounds) {
+    const rOddEven = countOddEven(r.numbers);
+
+    // 홀짝 패턴이 동일한 경우만
+    if (
+      rOddEven.odd === targetOddEven.odd &&
+      rOddEven.even === targetOddEven.even
+    ) {
+      const next = getPremiumRound(r.drwNo + 1);
+      if (!next) continue;
+
+      const nextOE = countOddEven(next.numbers);
+      oddNext += nextOE.odd;
+      evenNext += nextOE.even;
+      matchedCount++;
+    }
+  }
+
+  const oddEvenNextFreq = {
+    odd: oddNext,
+    even: evenNext,
+    ratio: oddNext + evenNext > 0 ? oddNext / (oddNext + evenNext) : 0,
+  };
+
+  // -----------------------------------
   // 결과 반환: 필요한 구조에 맞추어 형변환
   // -----------------------------------
   return {
@@ -313,6 +365,7 @@ export async function analyzePremiumRound(
     pattern7NextFreq: arrToRecord(pattern7Next),
     pattern5NextFreq: arrToRecord(pattern5Next),
     recentFreq: arrToRecord(recentFreqArr),
+    oddEvenNextFreq,
     nextRound: nextRoundWithBonus,
     generatedAt: new Date().toISOString(),
   };

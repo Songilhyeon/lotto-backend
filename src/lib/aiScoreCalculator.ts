@@ -2,10 +2,11 @@
 import { PremiumAnalysisResult } from "./premiumAnalyzer";
 
 export const AI_WEIGHTS = {
-  perNumber: 0.45,
-  kMatch: 0.3,
-  pattern: 0.15,
+  perNumber: 0.35,
+  kMatch: 0.25,
+  pattern: 0.2,
   recent: 0.1,
+  oddEven: 0.1,
 };
 
 /**
@@ -22,6 +23,14 @@ function getPatternWeights(clusterUnit: number) {
   return { w10: 0.1, w7: 0.1, w5: 1.0 };
 }
 
+function oddEvenScore(
+  num: number,
+  oddEven?: { odd: number; even: number; ratio: number }
+) {
+  if (!oddEven) return 0.5; // 정보 없으면 중립값
+  return num % 2 === 1 ? oddEven.ratio : 1 - oddEven.ratio;
+}
+
 /**
  * computeAiScore: analysis 객체가 불완전해도 안전하게 동작하도록 방어적으로 작성됨.
  *
@@ -33,19 +42,17 @@ export function computeAiScore(
   clusterUnit?: number
 ): number[] {
   clusterUnit = clusterUnit ?? 5;
-  // 인덱스 0은 unused, 1..45 사용
   const score = Array(46).fill(0);
 
-  // AI_WEIGHTS에서 필요한 값 가져오기 (기본값 방어)
-  const perNumberW = (AI_WEIGHTS && AI_WEIGHTS.perNumber) ?? 1;
-  const kMatchW = (AI_WEIGHTS && AI_WEIGHTS.kMatch) ?? 1;
-  const patternW = (AI_WEIGHTS && AI_WEIGHTS.pattern) ?? 1;
-  const recentW = (AI_WEIGHTS && AI_WEIGHTS.recent) ?? 1;
-  const clusterW = (AI_WEIGHTS && (AI_WEIGHTS as any).cluster) ?? 1; // optional
+  const perNumberW = AI_WEIGHTS.perNumber ?? 1;
+  const kMatchW = AI_WEIGHTS.kMatch ?? 1;
+  const patternW = AI_WEIGHTS.pattern ?? 1;
+  const recentW = AI_WEIGHTS.recent ?? 1;
+  const oddEvenW = AI_WEIGHTS.oddEven ?? 0; // ✅ 추가
+  const clusterW = (AI_WEIGHTS as any).cluster ?? 0;
 
   const { w10, w7, w5 } = getPatternWeights(clusterUnit);
 
-  // 안전한 핸들링을 위해 analysis 내부 필드 가져오기 (기본값 제공)
   const per = analysis.perNumberNextFreq ?? {};
   const km = analysis.kMatchNextFreq ?? {
     "1": Array(46).fill(0),
@@ -57,60 +64,55 @@ export function computeAiScore(
   const p7 = analysis.pattern7NextFreq ?? {};
   const p5 = analysis.pattern5NextFreq ?? {};
   const recent = analysis.recentFreq ?? {};
-  const rounds = (analysis as any).rounds ?? []; // 일부 코드에서 rounds 필요하면 analyzer에서 추가
+  const oddEven = analysis.oddEvenNextFreq; // ✅ 추가
+  const rounds = (analysis as any).rounds ?? [];
 
-  // selectedNums: perNumberNextFreq에 key가 없으면 빈 배열 처리
   const selectedNums = Object.keys(per).length
     ? Object.keys(per).map(Number)
     : [];
 
-  // 1) perNumberNextFreq 기반 가중 평균 (안전성: selectedNums 길이 체크)
-  const perAvg = Array(46).fill(0);
+  // 1️⃣ perNumberNextFreq
   if (selectedNums.length > 0) {
     for (let num = 1; num <= 45; num++) {
       let sum = 0;
       for (const sel of selectedNums) {
-        sum += (per[sel] && per[sel][num]) ?? 0;
+        sum += per[sel]?.[num] ?? 0;
       }
-      perAvg[num] = sum / selectedNums.length;
-      score[num] += perAvg[num] * perNumberW;
-    }
-  } else {
-    // per 데이터가 없다면 0 처리 (혹은 균일 기본값을 넣고 싶다면 설정)
-    for (let num = 1; num <= 45; num++) {
-      score[num] += 0;
+      score[num] += (sum / selectedNums.length) * perNumberW;
     }
   }
 
-  // 2) kMatchNextFreq (안전성: 각 km[...]이 비어있을 수 있음)
+  // 2️⃣ kMatch
   for (let num = 1; num <= 45; num++) {
-    const v1 = (km["1"] && (km["1"][num] ?? 0)) ?? 0;
-    const v2 = (km["2"] && (km["2"][num] ?? 0)) ?? 0;
-    const v3 = (km["3"] && (km["3"][num] ?? 0)) ?? 0;
-    const v4 = (km["4+"] && (km["4+"][num] ?? 0)) ?? 0;
-
-    const val = v1 * 0.7 + v2 * 0.2 + v3 * 0.1 + v4 * 0.05;
+    const val =
+      (km["1"]?.[num] ?? 0) * 0.7 +
+      (km["2"]?.[num] ?? 0) * 0.2 +
+      (km["3"]?.[num] ?? 0) * 0.1 +
+      (km["4+"]?.[num] ?? 0) * 0.05;
     score[num] += val * kMatchW;
   }
 
-  // 3) 패턴 혼합 (p10/p7/p5 중 존재하지 않는 필드는 0 처리)
+  // 3️⃣ pattern
   for (let num = 1; num <= 45; num++) {
-    const a = p10[num] ?? 0;
-    const b = p7[num] ?? 0;
-    const c = p5[num] ?? 0;
-
-    const mixedPattern = a * w10 + b * w7 + c * w5;
-    score[num] += mixedPattern * patternW;
+    const mixed =
+      (p10[num] ?? 0) * w10 + (p7[num] ?? 0) * w7 + (p5[num] ?? 0) * w5;
+    score[num] += mixed * patternW;
   }
 
-  // 4) 최근 빈도
+  // 4️⃣ recent
   for (let num = 1; num <= 45; num++) {
     score[num] += (recent[num] ?? 0) * recentW;
   }
 
-  // 5) (선택적) 강화된 Cluster 점수: 만약 rounds 정보가 analysis에 포함되어 있으면 적용
-  //    - 안전하게 동작하게 rounds가 없으면 건너뜀
-  if (Array.isArray(rounds) && rounds.length > 0) {
+  // 5️⃣ odd/even (NEW ✨)
+  if (oddEvenW > 0) {
+    for (let num = 1; num <= 45; num++) {
+      score[num] += oddEvenScore(num, oddEven) * oddEvenW;
+    }
+  }
+
+  // 6️⃣ optional cluster 강화 (기존 그대로)
+  if (Array.isArray(rounds) && rounds.length > 0 && clusterW > 0) {
     const recent20 = rounds.slice(-20);
     const recent3 = rounds.slice(-3);
     const prev = rounds.length >= 2 ? rounds[rounds.length - 2] : null;
@@ -119,32 +121,24 @@ export function computeAiScore(
       const clusterIndex = Math.floor((num - 1) / clusterUnit);
 
       const count20 = recent20.filter((r: any) =>
-        Array.isArray(r.numbers)
-          ? r.numbers.some(
-              (x: number) => Math.floor((x - 1) / clusterUnit) === clusterIndex
-            )
-          : false
+        r.numbers?.some(
+          (x: number) => Math.floor((x - 1) / clusterUnit) === clusterIndex
+        )
       ).length;
 
       const count3 = recent3.filter((r: any) =>
-        Array.isArray(r.numbers)
-          ? r.numbers.some(
-              (x: number) => Math.floor((x - 1) / clusterUnit) === clusterIndex
-            )
-          : false
+        r.numbers?.some(
+          (x: number) => Math.floor((x - 1) / clusterUnit) === clusterIndex
+        )
       ).length;
 
-      const appearedLast =
-        prev && Array.isArray(prev.numbers)
-          ? prev.numbers.some(
-              (x: number) => Math.floor((x - 1) / clusterUnit) === clusterIndex
-            )
-            ? 1
-            : 0
-          : 0;
+      const appearedLast = prev?.numbers?.some(
+        (x: number) => Math.floor((x - 1) / clusterUnit) === clusterIndex
+      )
+        ? 1
+        : 0;
 
-      const clusterScore = count20 * 10 + count3 * 5 + appearedLast * 10;
-      score[num] += clusterScore * clusterW;
+      score[num] += (count20 * 10 + count3 * 5 + appearedLast * 10) * clusterW;
     }
   }
 
