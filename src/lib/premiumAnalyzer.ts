@@ -32,6 +32,8 @@ export interface PremiumAnalysisResult {
     even: number;
     ratio: number; // odd / (odd + even)
   };
+  lastAppearance: Record<number, number>;
+  consecutiveAppearances: Record<number, number>; // 최근 연속 출현 횟수
 }
 
 type NextRoundObj = {
@@ -194,6 +196,63 @@ export async function analyzePremiumRound(
   const targetMask = bonusIncluded ? target.bonusMask : target.mask;
   // 과거 모든 회차(1..round-1)를 가져옴
   const rounds = getPremiumRange(1, round - 1);
+
+  // lastAppearance 계산 (전체 회차 검색)
+  const lastAppearanceMap: Record<number, number> = {};
+  for (let n = 1; n <= 45; n++) {
+    lastAppearanceMap[n] = 0;
+  }
+
+  for (let searchRound = round; searchRound >= 1; searchRound--) {
+    const r = getPremiumRound(searchRound);
+    if (!r) continue;
+
+    const mask = bonusIncluded ? r.bonusMask : r.mask;
+
+    for (let n = 1; n <= 45; n++) {
+      if (lastAppearanceMap[n] !== 0) continue;
+
+      const shift = BigInt(n - BASE);
+      if ((mask & (1n << shift)) !== 0n) {
+        lastAppearanceMap[n] = searchRound;
+      }
+    }
+
+    // 모든 번호를 찾았으면 조기 종료
+    const allFound = Object.values(lastAppearanceMap).every((v) => v !== 0);
+    if (allFound) break;
+  }
+
+  // consecutiveAppearances 계산 (끊김 추적)
+  const consecutiveMap: Record<number, number> = {};
+  const isBroken: Record<number, boolean> = {};
+
+  for (let n = 1; n <= 45; n++) {
+    consecutiveMap[n] = 0;
+    isBroken[n] = false;
+  }
+
+  for (let n = 1; n <= 45; n++) {
+    let currentStreak = 0;
+    let maxStreak = 0;
+
+    for (let searchRound = round; searchRound >= 1; searchRound--) {
+      const r = getPremiumRound(searchRound);
+      if (!r) break;
+
+      const mask = r.mask;
+      const shift = BigInt(n - 1);
+
+      if ((mask & (1n << shift)) !== 0n) {
+        currentStreak++;
+        if (currentStreak === 2) maxStreak++;
+      } else {
+        currentStreak = 0; // 끊기면 streak 리셋
+      }
+    }
+
+    consecutiveMap[n] = maxStreak; // 최대 streak 혹은 최근 streak 선택 가능
+  }
 
   // -----------------------------------
   // perNumberNextFreq 초기화
@@ -368,5 +427,7 @@ export async function analyzePremiumRound(
     oddEvenNextFreq,
     nextRound: nextRoundWithBonus,
     generatedAt: new Date().toISOString(),
+    lastAppearance: lastAppearanceMap,
+    consecutiveAppearances: consecutiveMap,
   };
 }

@@ -1,7 +1,6 @@
-// aiRecommender.ts
 import { analyzePremiumRound } from "./premiumAnalyzer";
 import { computeAiScore } from "./aiScoreCalculator";
-import { normalizeScores } from "../utils/normalizeScore";
+import { normalizeScores } from "../utils/normalizeScores";
 import { sortedLottoCache } from "../lib/lottoCache";
 import { OptimizedLottoNumber } from "../types/lotto";
 
@@ -25,31 +24,34 @@ export async function getAiRecommendation({
 }: AiRecommendOptions) {
   const analysis = await analyzePremiumRound(round, false, 20);
 
-  // 1) 원본 점수 생성
+  // 1️⃣ 원본 점수 (Raw)
   const rawScore = computeAiScore(analysis, clusterUnit);
+  // rawScore: Record<number, number>
 
-  // rawScore = Record<number, number>
-
-  // 2) 정규화된 점수로 변환
+  // 2️⃣ 정규화 점수 (0~100)
   const normalized = normalizeScores(rawScore);
 
-  // 3) scores 배열 생성 (프론트에서 사용)
-  const scores = Array.from({ length: 45 }, (_, i) => ({
-    num: i + 1,
-    final: normalized[i + 1] ?? 0,
-  }));
+  // 3️⃣ scores 배열 (표준 인터페이스)
+  const scores = Array.from({ length: 45 }, (_, i) => {
+    const num = i + 1;
+    return {
+      num,
+      finalRaw: rawScore[num] ?? 0, // ✅ raw 유지
+      final: normalized[num] ?? 0, // ✅ UI용
+    };
+  });
 
-  // 4) 추천 번호 (정규화된 점수 기준)
-  const recommended = scores
-    .slice()
+  // 4️⃣ 추천 번호 (정규화 점수 기준)
+  const recommended = [...scores]
     .sort((a, b) => b.final - a.final)
     .slice(0, 6)
     .map((s) => s.num);
 
-  // 5) 다음회차 정보
+  // 5️⃣ 다음 회차 정보
   const checkNextRound = sortedLottoCache.find(
-    (rec) => round + 1 === rec.drwNo
+    (rec) => rec.drwNo === round + 1
   );
+
   const nextRound = checkNextRound
     ? {
         round: checkNextRound.drwNo,
@@ -62,7 +64,7 @@ export async function getAiRecommendation({
     round,
     nextRound,
     recommended,
-    scores, // 🔥 이제 정규화된 점수 목록
+    scores, // ✅ raw + normalized 둘 다 포함
     generatedAt: new Date().toISOString(),
   };
 }

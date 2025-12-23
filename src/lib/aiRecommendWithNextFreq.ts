@@ -1,10 +1,10 @@
-// lib/aiRecommendWithNextFreq.ts
 import { PremiumLottoRecord } from "./premiumCache";
 import { analyzePremiumRound, PremiumAnalysisResult } from "./premiumAnalyzer";
-import { normalizeScores } from "../utils/normalizeScore";
+import { normalizeScores } from "../utils/normalizeScores";
 import { AiFeatureHelper } from "./aiFeatures";
 import { sortedLottoCache } from "../lib/lottoCache";
 import { OptimizedLottoNumber } from "../types/lotto";
+import { NumberScoreDetail } from "../types/api";
 
 export interface WeightConfig {
   hot: number;
@@ -13,19 +13,7 @@ export interface WeightConfig {
   pattern: number;
   cluster: number;
   random: number;
-  nextFreq?: number; // 이전회차 → 다음회차 연관성 가중치
-}
-
-export interface NumberScoreDetail {
-  num: number;
-  hot: number;
-  cold: number;
-  streak: number;
-  pattern: number;
-  cluster: number;
-  random: number;
-  nextFreq: number; // 이번에 추가
-  final: number;
+  nextFreq?: number;
 }
 
 export interface AIRecommendResult {
@@ -48,17 +36,13 @@ const getNumbers = (item: OptimizedLottoNumber) => [
   Number(item.drwtNo6),
 ];
 
-/**
- * 추천 조합 생성
- * @param rounds 과거 회차 데이터
- * @param weight 가중치
- */
 export async function recommendAIWithNextFreq(
   rounds: PremiumLottoRecord[],
   weight: WeightConfig,
-  clusterUnit: number = 5 // 기본값 유지
+  clusterUnit: number = 5
 ): Promise<AIRecommendResult> {
   const selectedRound = rounds[rounds.length - 1].drwNo;
+
   const analysis: PremiumAnalysisResult = await analyzePremiumRound(
     selectedRound,
     false,
@@ -66,18 +50,19 @@ export async function recommendAIWithNextFreq(
   );
 
   const nextFreqMap = analysis.perNumberNextFreq;
-  const rawScoreList: NumberScoreDetail[] = [];
   const helper = new AiFeatureHelper(rounds);
+
+  /* -------------------------
+   * 1️⃣ Raw 점수 계산
+   * ------------------------- */
+  const rawScoreList: Omit<NumberScoreDetail, "final">[] = [];
 
   for (let num = 1; num <= 45; num++) {
     const hot = helper.getHot(num);
     const cold = helper.getCold(num);
     const streak = helper.getStreakSimple(num);
     const pattern = helper.getPatternComplex(num);
-
-    // 🔥 clusterUnit 반영
     const cluster = helper.getCluster(num, clusterUnit);
-
     const random = Math.random();
 
     let nextFreqScore = 0;
@@ -85,7 +70,7 @@ export async function recommendAIWithNextFreq(
       nextFreqScore += nextFreqMap[prevNum]?.[num] ?? 0;
     }
 
-    const final =
+    const finalRaw =
       hot * weight.hot +
       cold * weight.cold +
       streak * weight.streak +
@@ -103,25 +88,34 @@ export async function recommendAIWithNextFreq(
       cluster,
       random,
       nextFreq: nextFreqScore,
-      final,
+      finalRaw,
     });
   }
 
+  /* -------------------------
+   * 2️⃣ 정규화 (UI용)
+   * ------------------------- */
   const normalizedMap = normalizeScores(
-    Object.fromEntries(rawScoreList.map((s) => [s.num, s.final]))
+    Object.fromEntries(rawScoreList.map((s) => [s.num, s.finalRaw]))
   );
 
-  const scoreList = rawScoreList.map((s) => ({
+  const scores: NumberScoreDetail[] = rawScoreList.map((s) => ({
     ...s,
-    final: normalizedMap[s.num],
+    final: normalizedMap[s.num] ?? 0,
   }));
 
-  const top20 = [...scoreList].sort((a, b) => b.final - a.final).slice(0, 20);
-  const picked = top20.slice(0, 6);
+  /* -------------------------
+   * 3️⃣ 추천 번호
+   * ------------------------- */
+  const picked = [...scores].sort((a, b) => b.final - a.final).slice(0, 6);
 
+  /* -------------------------
+   * 4️⃣ 다음 회차
+   * ------------------------- */
   const checkNextRound = sortedLottoCache.find(
-    (rec) => selectedRound + 1 === rec.drwNo
+    (rec) => rec.drwNo === selectedRound + 1
   );
+
   const nextRound = checkNextRound
     ? {
         round: checkNextRound.drwNo,
@@ -133,7 +127,7 @@ export async function recommendAIWithNextFreq(
   return {
     combination: picked.map((p) => p.num),
     details: picked,
-    scores: scoreList,
-    nextRound: nextRound ?? null,
+    scores,
+    nextRound,
   };
 }

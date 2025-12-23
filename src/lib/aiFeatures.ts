@@ -21,7 +21,8 @@ export class AiFeatureHelper {
   }
 
   getCold(num: number): number {
-    return this.totalRounds - this.freq[num];
+    // return this.totalRounds - this.freq[num];
+    return 1 - this.freq[num] / this.totalRounds;
   }
 
   /**
@@ -39,7 +40,11 @@ export class AiFeatureHelper {
    */
   getStreakRun(num: number, limit = 10): number {
     let streakRun = 0;
-    for (let i = this.totalRounds - 1; i >= Math.max(0, this.totalRounds - limit); i--) {
+    for (
+      let i = this.totalRounds - 1;
+      i >= Math.max(0, this.totalRounds - limit);
+      i--
+    ) {
       if (this.rounds[i]?.numbers.includes(num)) streakRun++;
       else break;
     }
@@ -54,12 +59,13 @@ export class AiFeatureHelper {
     const isOdd = num % 2 === 1;
 
     const oddRatio =
-      this.rounds.filter((r) => r.numbers.filter((x) => x % 2 === 1).length >= 3)
-        .length / this.totalRounds;
+      this.rounds.filter(
+        (r) => r.numbers.filter((x) => x % 2 === 1).length >= 3
+      ).length / this.totalRounds;
 
     const lastDigitFreq =
-      this.rounds.filter((r) => r.numbers.some((x) => x % 10 === lastDigit)).length /
-      this.totalRounds;
+      this.rounds.filter((r) => r.numbers.some((x) => x % 10 === lastDigit))
+        .length / this.totalRounds;
 
     return oddRatio * (isOdd ? 1 : 0.5) + lastDigitFreq;
   }
@@ -107,7 +113,8 @@ export class AiFeatureHelper {
     for (let i = 0; i < limit; i++) {
       const index = this.totalRounds - 1 - i;
       if (index < 0) break;
-      if (this.rounds[index].numbers.includes(num)) decayScore += Math.pow(alpha, i);
+      if (this.rounds[index].numbers.includes(num))
+        decayScore += Math.pow(alpha, i);
     }
     return decayScore;
   }
