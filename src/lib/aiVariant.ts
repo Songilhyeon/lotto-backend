@@ -30,7 +30,7 @@ export const AIVariants = {
     pattern: 1,
     density: 1,
     decay: 1,
-    noise: 5,
+    noise: 2,
   },
   // 군집형 - 번호 구간의 몰림 현상에 주목
   cluster: {
@@ -40,7 +40,7 @@ export const AIVariants = {
     pattern: 1,
     density: 5,
     decay: 1,
-    noise: 0.5,
+    noise: 0.1,
   },
   // 최근형 -
   decay: {

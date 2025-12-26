@@ -1,34 +1,31 @@
-// lib/analysis/aiScoreCalculator.ts
 import { PremiumAnalysisResult } from "./premiumAnalyzer";
 
 export const AI_WEIGHTS = {
-  perNumber: 0.35,
-  kMatch: 0.25,
-  pattern: 0.2,
-  recent: 0.1,
-  oddEven: 0.1,
+  perNumber: 1,
+  kMatch: 2,
+  pattern: 2,
+  recent: 1,
+  oddEven: 1,
+  clusterW: 3,
 };
 
 /**
  * 안전한 패턴 가중치 선택
  */
-// function getPatternWeights(clusterUnit: number) {
-//   if (clusterUnit >= 9) return { w10: 0.6, w7: 0.3, w5: 0.1 };
-//   if (clusterUnit >= 7) return { w10: 0.3, w7: 0.5, w5: 0.2 };
-//   return { w10: 0.2, w7: 0.3, w5: 0.5 };
-// }
 function getPatternWeights(clusterUnit: number) {
-  if (clusterUnit >= 9) return { w10: 1.0, w7: 0.1, w5: 0.1 };
-  if (clusterUnit >= 7) return { w10: 0.1, w7: 1.0, w5: 0.1 };
-  return { w10: 0.1, w7: 0.1, w5: 1.0 };
+  if (clusterUnit >= 9) return { w10: 0.6, w7: 0.3, w5: 0.1 };
+  if (clusterUnit >= 7) return { w10: 0.3, w7: 0.5, w5: 0.2 };
+  return { w10: 0.2, w7: 0.3, w5: 0.5 };
 }
 
 function oddEvenScore(
   num: number,
   oddEven?: { odd: number; even: number; ratio: number }
 ) {
-  if (!oddEven) return 0.5; // 정보 없으면 중립값
-  return num % 2 === 1 ? oddEven.ratio : 1 - oddEven.ratio;
+  if (!oddEven) return 0.5;
+  const isOdd = num % 2 === 1;
+  // ratio가 홀수 선호도라면
+  return isOdd ? oddEven.ratio : 1 - oddEven.ratio;
 }
 
 /**
@@ -44,12 +41,12 @@ export function computeAiScore(
   clusterUnit = clusterUnit ?? 5;
   const score = Array(46).fill(0);
 
-  const perNumberW = AI_WEIGHTS.perNumber ?? 1;
-  const kMatchW = AI_WEIGHTS.kMatch ?? 1;
-  const patternW = AI_WEIGHTS.pattern ?? 1;
-  const recentW = AI_WEIGHTS.recent ?? 1;
-  const oddEvenW = AI_WEIGHTS.oddEven ?? 0; // ✅ 추가
-  const clusterW = (AI_WEIGHTS as any).cluster ?? 0;
+  const perNumberW = AI_WEIGHTS.perNumber;
+  const kMatchW = AI_WEIGHTS.kMatch;
+  const patternW = AI_WEIGHTS.pattern;
+  const recentW = AI_WEIGHTS.recent;
+  const oddEvenW = AI_WEIGHTS.oddEven;
+  const clusterW = AI_WEIGHTS.clusterW;
 
   const { w10, w7, w5 } = getPatternWeights(clusterUnit);
 
@@ -64,7 +61,7 @@ export function computeAiScore(
   const p7 = analysis.pattern7NextFreq ?? {};
   const p5 = analysis.pattern5NextFreq ?? {};
   const recent = analysis.recentFreq ?? {};
-  const oddEven = analysis.oddEvenNextFreq; // ✅ 추가
+  const oddEven = analysis.oddEvenNextFreq;
   const rounds = (analysis as any).rounds ?? [];
 
   const selectedNums = Object.keys(per).length
@@ -104,14 +101,14 @@ export function computeAiScore(
     score[num] += (recent[num] ?? 0) * recentW;
   }
 
-  // 5️⃣ odd/even (NEW ✨)
+  // 5️⃣ odd/even
   if (oddEvenW > 0) {
     for (let num = 1; num <= 45; num++) {
       score[num] += oddEvenScore(num, oddEven) * oddEvenW;
     }
   }
 
-  // 6️⃣ optional cluster 강화 (기존 그대로)
+  // 6️⃣ cluster 강화 (정규화 적용)
   if (Array.isArray(rounds) && rounds.length > 0 && clusterW > 0) {
     const recent20 = rounds.slice(-20);
     const recent3 = rounds.slice(-3);
@@ -138,7 +135,11 @@ export function computeAiScore(
         ? 1
         : 0;
 
-      score[num] += (count20 * 10 + count3 * 5 + appearedLast * 10) * clusterW;
+      // 클러스터 점수 계산 및 정규화 (최대값 250 기준)
+      const clusterScore = count20 * 10 + count3 * 5 + appearedLast * 10;
+      const normalizedCluster = clusterScore / 250;
+
+      score[num] += normalizedCluster * clusterW;
     }
   }
 

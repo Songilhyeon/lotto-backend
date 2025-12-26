@@ -61,12 +61,12 @@ router.get("/", async (req, res) => {
       tops: [...nationwideStoreMap.values()]
         .sort((a, b) => b.appearanceCount - a.appearanceCount)
         .slice(0, 10),
-      region: [...nationwideRegionMap.entries()].map(
-        ([region, regionCount]) => ({
+      region: [...nationwideRegionMap.entries()]
+        .sort(([a], [b]) => a.localeCompare(b, "ko"))
+        .map(([region, regionCount]) => ({
           region,
-          regionCount, // 지역 / 구 단위 : 해당 지역에서 당첨 판매점이 나온 총 횟수
-        })
-      ),
+          regionCount,
+        })),
       method: {
         auto: nationwideAuto,
         semi: nationwideSemi,
@@ -127,9 +127,9 @@ router.get("/", async (req, res) => {
           .slice(0, 10),
         method: { auto: autoR, semi: semiR, manual: manualR },
         region: [{ region, regionCount }],
-        subRegionStats: [...subRegionMap.entries()].map(
-          ([subRegion, regionCount]) => ({ subRegion, regionCount })
-        ),
+        subRegionStats: [...subRegionMap.entries()]
+          .sort(([a], [b]) => a.localeCompare(b, "ko"))
+          .map(([subRegion, regionCount]) => ({ subRegion, regionCount })),
       };
     }
 

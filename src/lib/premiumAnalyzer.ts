@@ -194,6 +194,7 @@ export async function analyzePremiumRound(
 
   // 타겟 회차의 마스크 (보너스 포함 여부에 따라 선택)
   const targetMask = bonusIncluded ? target.bonusMask : target.mask;
+
   // 과거 모든 회차(1..round-1)를 가져옴
   const rounds = getPremiumRange(1, round - 1);
 
@@ -241,7 +242,7 @@ export async function analyzePremiumRound(
       if (!r) break;
 
       const mask = r.mask;
-      const shift = BigInt(n - 1);
+      const shift = BigInt(n - BASE);
 
       if ((mask & (1n << shift)) !== 0n) {
         currentStreak++;
@@ -286,7 +287,8 @@ export async function analyzePremiumRound(
   // -----------------------------------
   for (const r of rounds) {
     // 타겟 회차와 과거 회차 r의 공통 번호 개수(k), 교집합 크기
-    const k = inter(targetMask, r.mask);
+    const rMask = bonusIncluded ? r.bonusMask : r.mask;
+    const kMatch = inter(targetMask, rMask);
 
     // 과거 회차 r의 다음 회차(데이터)는 다음 회차의 마스크를 이용해 분석
     const next = getPremiumRound(r.drwNo + 1);
@@ -298,11 +300,7 @@ export async function analyzePremiumRound(
       if (!isValidNumber(tn)) continue;
       // 이 과거 회차 r에 우리가 추적하는 n이 포함되어 있었는지 검사
       const shiftT = BigInt(tn - BASE);
-      const inCurrent =
-        (r.mask & (1n << shiftT)) !== 0n ||
-        (bonusIncluded &&
-          target.bonus === tn &&
-          (r.bonusMask & (1n << shiftT)) !== 0n);
+      const inCurrent = (rMask & (1n << shiftT)) !== 0n;
 
       if (!inCurrent) continue; // 해당 번호가 과거 회차 r에 없으면 건너뜀
 
@@ -318,10 +316,10 @@ export async function analyzePremiumRound(
       const shift = BigInt(m - BASE);
       if ((nextMask & (1n << shift)) === 0n) continue;
 
-      if (k >= 4) kMatchNext["4+"][m]++;
-      else if (k === 3) kMatchNext["3"][m]++;
-      else if (k === 2) kMatchNext["2"][m]++;
-      else if (k === 1) kMatchNext["1"][m]++;
+      if (kMatch >= 4) kMatchNext["4+"][m]++;
+      else if (kMatch === 3) kMatchNext["3"][m]++;
+      else if (kMatch === 2) kMatchNext["2"][m]++;
+      else if (kMatch === 1) kMatchNext["1"][m]++;
     }
   }
 

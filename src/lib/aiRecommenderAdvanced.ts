@@ -109,7 +109,7 @@ export async function getAiRecommendationAdvanced(
   const analysis: PremiumAnalysisResult = await analyzePremiumRound(
     round,
     false,
-    20
+    100
   );
   const randomGen = new SeededRandom(seed);
   const weight = customWeights ?? preset.weight;

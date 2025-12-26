@@ -21,8 +21,12 @@ export class AiFeatureHelper {
   }
 
   getCold(num: number): number {
-    // return this.totalRounds - this.freq[num];
-    return 1 - this.freq[num] / this.totalRounds;
+    for (let i = this.totalRounds - 1; i >= 0; i--) {
+      if (this.rounds[i].numbers.includes(num)) {
+        return this.totalRounds - 1 - i;
+      }
+    }
+    return this.totalRounds; // 한 번도 안 나온 경우
   }
 
   /**
@@ -76,7 +80,20 @@ export class AiFeatureHelper {
   getPatternSimple(num: number): number {
     const isOdd = num % 2 === 1;
     const lastDigit = num % 10;
-    return (isOdd ? 0.7 : 0.3) + lastDigit / 10;
+
+    // 과거 데이터에서 홀수/짝수 비율 계산
+    const oddCount = this.rounds.filter(
+      (r) => r.numbers.filter((x) => x % 2 === 1).length >= 3
+    ).length;
+    const oddRatio = oddCount / this.totalRounds;
+
+    // 끝자리 빈도 계산
+    const digitCount = this.rounds.filter((r) =>
+      r.numbers.some((x) => x % 10 === lastDigit)
+    ).length;
+    const digitRatio = digitCount / this.totalRounds;
+
+    return (isOdd ? oddRatio : 1 - oddRatio) + digitRatio;
   }
 
   /**
