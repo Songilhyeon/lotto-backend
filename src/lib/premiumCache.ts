@@ -1,4 +1,4 @@
-// premiumCache.ts + AI 추천 기능 확장 (Bitmask 기반 완전 최적화 버전)
+// premiumCache.ts + AI 점수계산 기능 확장 (Bitmask 기반 완전 최적화 버전)
 
 import { sortedLottoCache } from "../lib/lottoCache";
 import Redis from "ioredis";
@@ -137,7 +137,7 @@ export async function redisSet<T>(key: string, value: T, ttl = 3600) {
 }
 
 /* ------------------------------------------------------
- * AI 추천 엔진 — BASE 반영한 maskHas 사용
+ * AI 점수계산 엔진 — BASE 반영한 maskHas 사용
  * ------------------------------------------------------ */
 export interface AiNextPredictionResult {
   numbers: number[];

@@ -1,4 +1,4 @@
-interface BuildSummaryParams {
+interface BuildNextRoundPreviewInput {
   start: number;
   end: number;
   minMatch: number;
@@ -6,49 +6,83 @@ interface BuildSummaryParams {
   nextFrequency: Record<number, number>;
 }
 
-export function buildNextRoundPreviewSummary(params: BuildSummaryParams) {
-  const { start, end, minMatch, resultsCount, nextFrequency } = params;
+export function buildNextRoundPreviewSummary(
+  input: BuildNextRoundPreviewInput
+) {
+  const { start, end, minMatch, resultsCount, nextFrequency } = input;
+
+  const entries = Object.entries(nextFrequency)
+    .map(([n, c]) => ({ number: Number(n), count: c }))
+    .filter((v) => v.count > 0);
+
+  const totalAppearances = entries.reduce((s, v) => s + v.count, 0);
+  const avgFreq = totalAppearances / 45;
+  const maxFreq = Math.max(...entries.map((v) => v.count));
 
   // -----------------------------
-  // 1️⃣ 빈도 정렬
+  // 🔥 판단 headline
   // -----------------------------
-  const freqList = Object.entries(nextFrequency)
-    .map(([num, count]) => ({ num: Number(num), count }))
-    .filter((v) => v.count > 0)
-    .sort((a, b) => b.count - a.count);
+  let headline = "유사 패턴 이후, 번호 분포는 비교적 고르게 나타났습니다.";
 
-  const hot = freqList.slice(0, 3).map((v) => v.num);
-  const watch = freqList.slice(-3).map((v) => v.num);
+  if (maxFreq >= avgFreq * 2) {
+    headline =
+      "유사 패턴 이후, 다음 회차에서 특정 번호 쏠림이 강하게 나타났습니다.";
+  } else if (maxFreq >= avgFreq * 1.5) {
+    headline =
+      "유사 패턴 이후, 다음 회차에서 일부 번호의 반복 빈도가 높았습니다.";
+  }
 
   // -----------------------------
-  // 2️⃣ 시그널 구성
+  // 📌 signals 생성
   // -----------------------------
   const signals = [];
 
-  if (resultsCount > 0) {
+  if (maxFreq >= avgFreq * 2) {
     signals.push({
-      id: "transition",
-      label: "유사 회차 기반 분석",
-      desc: `번호가 ${minMatch}개 이상 일치한 ${resultsCount}개 과거 회차의 다음 결과를 분석했습니다.`,
+      id: "FREQ_SPIKE",
+      label: "번호 쏠림",
+      desc: "일부 번호가 평균 대비 2배 이상 자주 등장했습니다.",
+      strength: "strong",
+    });
+  } else if (maxFreq >= avgFreq * 1.5) {
+    signals.push({
+      id: "FREQ_BIAS",
+      label: "부분 집중",
+      desc: "특정 번호에 출현 빈도가 다소 집중되었습니다.",
+      strength: "normal",
+    });
+  } else {
+    signals.push({
+      id: "FREQ_BALANCE",
+      label: "고른 분포",
+      desc: "번호 출현이 비교적 고르게 분포되었습니다.",
+      strength: "weak",
     });
   }
 
-  if (hot.length > 0) {
+  if (resultsCount < 5) {
     signals.push({
-      id: "frequency",
-      label: "다음 회차 빈도 집중",
-      desc: `다음 회차에서 ${hot.join(
-        ", "
-      )} 번호의 출현 빈도가 상대적으로 높았습니다.`,
+      id: "LOW_SAMPLE",
+      label: "표본 부족",
+      desc: "유사 회차 수가 적어 해석 신뢰도가 낮을 수 있습니다.",
+      strength: "weak",
     });
   }
 
-  signals.push({
-    id: "range",
-    label: "패턴 관찰 필요",
-    desc: "다음 회차 번호 분포에서 특정 패턴이 관찰됩니다.",
-  });
+  // -----------------------------
+  // 🔢 highlight 번호 추출
+  // -----------------------------
+  const sorted = [...entries].sort((a, b) => b.count - a.count);
 
+  const hot = sorted.slice(0, 5).map((v) => v.number);
+  const watch = sorted
+    .slice(5, 10)
+    .filter((v) => v.count >= avgFreq)
+    .map((v) => v.number);
+
+  // -----------------------------
+  // ✅ 최종 반환
+  // -----------------------------
   return {
     basis: {
       start,
@@ -56,6 +90,7 @@ export function buildNextRoundPreviewSummary(params: BuildSummaryParams) {
       minMatch,
       totalMatchedRounds: resultsCount,
     },
+    headline,
     signals,
     highlight: {
       hot,

@@ -28,6 +28,6 @@ export async function getAiRecommendationController(
     console.error("AI Recommendation error:", err);
     return res
       .status(500)
-      .json({ ok: false, error: "AI 추천 실패", detail: err?.message });
+      .json({ ok: false, error: "AI 점수 분석 실패", detail: err?.message });
   }
 }

@@ -3,7 +3,7 @@ import { getPremiumRange } from "./premiumCache";
 import { AiFeatureHelper } from "./aiFeatures";
 import { normalizeScores } from "../utils/normalizeScores";
 
-// 고급 개선 버전 — 독립 Feature 합산형 추천기
+// 고급 개선 버전 — 독립 Feature 합산형 점수계산기
 
 export interface IndependentConfig {
   hot: number;

@@ -120,3 +120,51 @@ export async function initializeLottoCache() {
     `>>> 총 ${storeRecords.length}개 판매점 캐싱 완료 (identity index 포함)`
   );
 }
+
+export function addStoreToCache(
+  store: LottoStore & { drwNoDate: Date | null }
+) {
+  if (
+    lottoStoreCache.some(
+      (s) =>
+        s.drwNo === store.drwNo &&
+        s.store === store.store &&
+        s.address === store.address &&
+        s.rank === store.rank
+    )
+  ) {
+    return;
+  }
+
+  // 전체 캐시
+  lottoStoreCache.push(store);
+
+  // identity index
+  if (store.store && store.address) {
+    const key = `${normalize(store.store)}|${normalize(store.address)}`;
+    if (!lottoStoreByIdentity.has(key)) {
+      lottoStoreByIdentity.set(key, []);
+    }
+    lottoStoreByIdentity.get(key)!.push(store);
+  }
+
+  // rank별
+  if (!lottoStoreByRank.has(store.rank)) {
+    lottoStoreByRank.set(store.rank, []);
+  }
+  lottoStoreByRank.get(store.rank)!.push(store);
+
+  // rank + region
+  const region =
+    typeof store.address === "string" ? store.address.split(" ")[0] : "기타";
+
+  if (!lottoStoreIndex.has(store.rank)) {
+    lottoStoreIndex.set(store.rank, new Map());
+  }
+  const regionMap = lottoStoreIndex.get(store.rank)!;
+
+  if (!regionMap.has(region)) {
+    regionMap.set(region, []);
+  }
+  regionMap.get(region)!.push(store);
+}

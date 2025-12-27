@@ -4,7 +4,7 @@ import {
   sortedLottoCache,
   lottoStoreByRank,
   toOptimized,
-  lottoStoreCache,
+  addStoreToCache,
 } from "./lottoCache";
 import { redis } from "./premiumCache";
 import { fetchLottoStores, LottoResult } from "./lottoCrawler";
@@ -100,13 +100,13 @@ export async function saveLatestLotto(round: number) {
           },
         });
 
-        // 메모리 캐시 업데이트
-        lottoStoreCache.push({
+        // 메모리 캐시 업데이트 (통합 인덱스 반영)
+        addStoreToCache({
           drwNo: round,
-          drwNoDate: apiData.drwNoDate,
+          drwNoDate: new Date(apiData.drwNoDate),
           store: store.store,
-          address: store.address,
-          rank: store.rank,
+          address: store.address ?? "",
+          rank: store.rank ?? 0,
           autoWin: store.autoWin ?? 0,
           semiAutoWin: store.semiAutoWin ?? 0,
           manualWin: store.manualWin ?? 0,

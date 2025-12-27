@@ -41,7 +41,7 @@ export async function getAiRecommendation({
     };
   });
 
-  // 4️⃣ 추천 번호 (정규화 점수 기준)
+  // 4️⃣ 점수 분석 번호 (정규화 점수 기준)
   const recommended = [...scores]
     .sort((a, b) => b.final - a.final)
     .slice(0, 6)

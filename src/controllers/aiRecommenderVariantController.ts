@@ -50,7 +50,7 @@ export async function getAiRecommenderVariantController(
   } catch (err) {
     console.error("[AI Variant Error]", err);
     return res.status(500).json({
-      message: "AI Variant 추천 중 오류가 발생했습니다",
+      message: "AI Variant 점수 분석 중 오류가 발생했습니다",
     });
   }
 }

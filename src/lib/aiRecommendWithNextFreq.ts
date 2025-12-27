@@ -105,7 +105,7 @@ export async function recommendAIWithNextFreq(
   }));
 
   /* -------------------------
-   * 3️⃣ 추천 번호
+   * 3️⃣ 점수계산 TOP 번호
    * ------------------------- */
   const picked = [...scores].sort((a, b) => b.final - a.final).slice(0, 6);
 

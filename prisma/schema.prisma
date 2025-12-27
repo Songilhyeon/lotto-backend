@@ -239,7 +239,7 @@ model VisitCounter {
 }
 
 // ================================
-// History (회차별 추천 기록)
+// History (회차별 번호점수 기록)
 // ================================
 model History {
   id        String   @id @default(cuid())
