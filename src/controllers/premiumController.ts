@@ -37,6 +37,7 @@ export async function getPremiumAnalysis(req: Request, res: Response) {
       bonusIncluded: result.bonusIncluded,
       perNumberNextFreq: result.perNumberNextFreq,
       kMatchNextFreq: result.kMatchNextFreq,
+      pattern15NextFreq: result.pattern15NextFreq,
       pattern10NextFreq: result.pattern10NextFreq,
       pattern7NextFreq: result.pattern7NextFreq,
       pattern5NextFreq: result.pattern5NextFreq,
