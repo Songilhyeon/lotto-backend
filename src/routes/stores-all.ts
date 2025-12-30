@@ -26,6 +26,9 @@ router.get("/", (req, res) => {
     const region = req.query.region as string | undefined;
     const q = req.query.q as string | undefined;
 
+    const sortKey = (req.query.sortKey as string) || "latestRound";
+    const sortOrder = (req.query.sortOrder as string) || "desc";
+
     const page = Math.max(Number(req.query.page) || 1, 1);
     const limit = Math.min(Number(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
@@ -38,14 +41,14 @@ router.get("/", (req, res) => {
       : lottoStoreCache;
 
     // ----------------------------
-    // 2️⃣ 지역 목록 추출 (필터 전, rank 기준)
+    // 2️⃣ 지역 목록 추출 (rank 기준)
     // ----------------------------
     const regionSet = new Set<string>();
 
     for (const item of source) {
       let r = item.address.split(" ")[0];
       if (r.includes("동행복권")) r = "인터넷";
-      if (r !== "전국") regionSet.add(r);
+      regionSet.add(r);
     }
 
     const regions = Array.from(regionSet).sort((a, b) =>
@@ -75,7 +78,7 @@ router.get("/", (req, res) => {
     }
 
     // ----------------------------
-    // 5️⃣ 업체 단위 그룹핑 (store + address)
+    // 5️⃣ 업체 단위 그룹핑
     // ----------------------------
     const groupedMap = new Map<string, GroupedStore>();
 
@@ -110,17 +113,43 @@ router.get("/", (req, res) => {
     }
 
     // ----------------------------
-    // 6️⃣ 정렬 + 페이지네이션
+    // 6️⃣ 정렬 (핵심)
     // ----------------------------
-    const groupedStores = Array.from(groupedMap.values()).sort(
-      (a, b) => b.lastWinDrwNo - a.lastWinDrwNo
-    );
+    const groupedStores = Array.from(groupedMap.values());
 
+    groupedStores.sort((a, b) => {
+      let result = 0;
+
+      switch (sortKey) {
+        case "name":
+          result = a.store.localeCompare(b.store, "ko");
+          break;
+
+        case "winCount":
+          result = a.totalWins - b.totalWins;
+          break;
+
+        case "firstRound":
+          result = a.firstWinDrwNo - b.firstWinDrwNo;
+          break;
+
+        case "latestRound":
+        default:
+          result = a.lastWinDrwNo - b.lastWinDrwNo;
+          break;
+      }
+
+      return sortOrder === "asc" ? result : -result;
+    });
+
+    // ----------------------------
+    // 7️⃣ 페이지네이션
+    // ----------------------------
     const total = groupedStores.length;
     const stores = groupedStores.slice(offset, offset + limit);
 
     // ----------------------------
-    // 7️⃣ 응답
+    // 8️⃣ 응답
     // ----------------------------
     res.json({
       total,

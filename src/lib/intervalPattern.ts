@@ -258,3 +258,23 @@ export function getLastGap(
 
   return rounds[idx] - rounds[idx - 1];
 }
+
+/**
+ * 선택한 기간 동안 번호별 출현 횟수
+ */
+export function buildPerNumberCountInRange(
+  appearMap: Map<number, number[]>,
+  startRound: number,
+  endRound: number
+): Map<number, number> {
+  const countMap = new Map<number, number>();
+
+  for (let n = 1; n <= 45; n++) {
+    const rounds = appearMap.get(n) ?? [];
+    const count = rounds.filter((r) => r >= startRound && r <= endRound).length;
+
+    countMap.set(n, count);
+  }
+
+  return countMap;
+}

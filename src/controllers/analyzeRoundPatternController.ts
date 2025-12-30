@@ -6,6 +6,8 @@ import {
   predictNextNumbers,
   predictNextPattern,
 } from "../lib/roundDistPattern";
+import { sortedLottoCache } from "../lib/lottoCache";
+import { extractNumbers } from "../utils/lottoNumberUtils";
 
 /**
  * GET /api/analyze/round-pattern
@@ -90,6 +92,21 @@ export async function analyzeRoundPatternController(
         .json({ ok: false, error: "target round not found" });
     }
 
+    /* -------------------------
+     * 4️⃣ 다음 회차
+     * ------------------------- */
+    const checkNextRound = sortedLottoCache.find(
+      (rec) => rec.drwNo === targetRound + 1
+    );
+
+    const nextRound = checkNextRound
+      ? {
+          round: checkNextRound.drwNo,
+          numbers: extractNumbers(checkNextRound),
+          bonus: Number(checkNextRound.bnusNo),
+        }
+      : null;
+
     // 패턴 분석
     const pattern = buildDistPattern(target);
 
@@ -119,6 +136,7 @@ export async function analyzeRoundPatternController(
           numbers: [],
           patterns: [],
         },
+        nextRound,
       });
     }
 
@@ -161,6 +179,7 @@ export async function analyzeRoundPatternController(
           .sort((a, b) => b.probability - a.probability)
           .slice(0, 10),
       },
+      nextRound,
     });
   } catch (err: any) {
     console.error(err);

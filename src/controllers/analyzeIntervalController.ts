@@ -8,7 +8,10 @@ import {
   ensembleIntervalPatternNextFreq,
   getCurrentGap,
   getLastGap,
+  buildPerNumberCountInRange,
 } from "../lib/intervalPattern";
+import { sortedLottoCache } from "../lib/lottoCache";
+import { extractNumbers } from "../utils/lottoNumberUtils";
 
 export async function analyzeIntervalController(req: Request, res: Response) {
   try {
@@ -23,32 +26,58 @@ export async function analyzeIntervalController(req: Request, res: Response) {
 
     const rounds = getPremiumRange(start, end);
     if (!rounds.length) {
-      return res.json({ ok: true, start, end, perNumber: [], ensemble: [] });
+      return res.json({
+        ok: true,
+        start,
+        end,
+        perNumber: [],
+        ensemble: [],
+      });
     }
 
     const base = rounds[rounds.length - 1];
+
     const appearMap = buildAppearMap(rounds);
     const patternIndex = buildPatternRoundIndex(appearMap);
+
+    // ✅ 기간 내 번호별 출현 횟수
+    const appearCountMap = buildPerNumberCountInRange(appearMap, start, end);
 
     const perNumber = Array.from({ length: 45 }, (_, i) => {
       const num = i + 1;
       const latestPattern = getLatestIntervalPattern(appearMap, num);
 
-      // 해당 번호의 해당 패턴 출현 횟수 (범위 내)
-      const sampleCount = latestPattern
+      // ✅ 패턴 출현 횟수 (패턴 신뢰도)
+      const patternSampleCount = latestPattern
         ? countPatternOccurrences(appearMap, num, latestPattern, start, end)
         : 0;
 
       return {
         num,
         latestPattern,
-        sampleCount,
+        appearCount: appearCountMap.get(num) ?? 0, // ✅ 추가
+        patternSampleCount, // ✅ 의미 명확
         currentGap: getCurrentGap(appearMap, num, end),
         lastGap: getLastGap(appearMap, num, end),
       };
     });
 
     const ensembleMap = ensembleIntervalPatternNextFreq(rounds, base.numbers);
+
+    /* -------------------------
+     * 4️⃣ 다음 회차
+     * ------------------------- */
+    const checkNextRound = sortedLottoCache.find(
+      (rec) => rec.drwNo === base.drwNo + 1
+    );
+
+    const nextRound = checkNextRound
+      ? {
+          round: checkNextRound.drwNo,
+          numbers: extractNumbers(checkNextRound),
+          bonus: Number(checkNextRound.bnusNo),
+        }
+      : null;
 
     return res.json({
       ok: true,
@@ -60,6 +89,7 @@ export async function analyzeIntervalController(req: Request, res: Response) {
       ensemble: [...ensembleMap.entries()]
         .map(([num, score]) => ({ num, score }))
         .sort((a, b) => b.score - a.score),
+      nextRound,
     });
   } catch (err: any) {
     console.error(err);
