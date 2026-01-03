@@ -71,7 +71,7 @@ app.get("/api/visit", (req: Request, res: Response) => {
 // 라우터 등록
 app.use("/api/auth", authRouter);
 app.use("/api/posts", lottoPostsRouter);
-app.use("/api/subscribe", subscriptionRouter);
+// app.use("/api/subscribe", subscriptionRouter); // 결제 관련 라우터
 app.use("/api/lotto/round", lottoGetRoundRouter);
 app.use("/api/lotto/rounds", lottoGetRoundsRouter);
 app.use("/api/lotto/frequency", lottoFrequency);

@@ -25,48 +25,6 @@ const setTokenCookie = (res: any, token: string) => {
 };
 
 //-------------------------------------------
-// 테스트 로그인 (로컬 / 개발용)
-//-------------------------------------------
-router.post("/test-login", async (req, res) => {
-  try {
-    const email = "testuser@example.com";
-    const name = "테스트 유저";
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
-
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { name, role: "PREMIUM", subscriptionExpiresAt: expiresAt },
-      create: {
-        email,
-        name,
-        role: "PREMIUM",
-        subscriptionExpiresAt: expiresAt,
-      },
-    });
-
-    const jwtToken = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        subscriptionExpiresAt: user.subscriptionExpiresAt,
-      },
-      process.env.JWT_SECRET!,
-      { expiresIn: "7d" }
-    );
-
-    setTokenCookie(res, jwtToken);
-
-    res.json({ ok: true, user });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ ok: false, message: "Test login failed" });
-  }
-});
-
-//-------------------------------------------
 // 로그인된 사용자 확인
 //-------------------------------------------
 router.get("/me", auth, (req: AuthRequest, res) => {
@@ -157,9 +115,13 @@ router.get("/callback/:provider", async (req: AuthRequest, res) => {
     setTokenCookie(res, jwtToken);
 
     // 항상 새로운 state 또는 프론트 URL 사용
-    const redirectUrl =
-      typeof state === "string" ? decodeURIComponent(state) : FRONTEND_URL;
-    res.redirect(redirectUrl);
+    // const redirectUrl =
+    //   typeof state === "string" ? decodeURIComponent(state) : FRONTEND_URL;
+    // res.redirect(redirectUrl);
+
+    // 지금 백엔드는 state를 “리다이렉트 URL”로 쓰고 있어서 위험해.
+    // 가장 쉬운 즉시 안전조치는: callback에서 state 무시하고 무조건 FRONTEND_URL로 보내는 것.
+    res.redirect(FRONTEND_URL);
   } catch (err) {
     console.error(err);
     res.status(500).send("OAuth callback error");

@@ -5,7 +5,7 @@ import {
   analyzePremiumRound,
   PremiumAnalysisResult,
 } from "../lib/premiumAnalyzer";
-import { initializePremiumCache, redis } from "../lib/premiumCache";
+import { initializePremiumCache } from "../lib/premiumCache";
 
 // ------------------------------
 // 프리미엄 분석 API
@@ -61,7 +61,6 @@ export async function getPremiumAnalysis(req: Request, res: Response) {
 // ------------------------------
 export async function rebuildPremiumCache(req: Request, res: Response) {
   try {
-    await redis.flushdb();
     initializePremiumCache();
     res.json({ ok: true, message: "Premium cache rebuilt" });
   } catch (err: any) {

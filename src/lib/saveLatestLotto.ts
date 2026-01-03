@@ -6,7 +6,6 @@ import {
   toOptimized,
   addStoreToCache,
 } from "./lottoCache";
-import { redis } from "./premiumCache";
 import { fetchLottoStores, LottoResult } from "./lottoCrawler";
 
 const getLottoAPI = (round: number | string) =>
@@ -117,8 +116,6 @@ export async function saveLatestLotto(round: number) {
     lottoCache.set(round, record);
     sortedLottoCache.push(toOptimized(record));
     sortedLottoCache.sort((a, b) => a.drwNo - b.drwNo);
-
-    await redis.set(`lotto:${round}`, JSON.stringify(record));
 
     console.log(`✅ 회차 ${round} 저장 완료 (1등 + 2등 통합)`);
 
