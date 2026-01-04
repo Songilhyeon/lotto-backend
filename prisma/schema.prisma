@@ -28,6 +28,11 @@ model LottoNumber {
   totSellamnt    String
   firstAccumamnt String
 
+  // ✅ 2등 (추가 추천)
+  secondPrzwnerCo String?
+  secondWinamnt   String?
+  secondAccumamnt String?
+
   // 신규 컬럼 (nullable)
   autoWin     Int?
   semiAutoWin Int?

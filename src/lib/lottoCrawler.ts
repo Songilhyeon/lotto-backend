@@ -1,10 +1,10 @@
-import puppeteer from "puppeteer";
-import type { Browser } from "puppeteer";
-
+// lottoCrawler.ts (JSON 판매점 API 기반 - stores 저장용)
 export interface LottoStoreInfo {
-  rank: number;
+  rank: number; // 1 | 2
   store: string;
   address: string;
+
+  // 이제 이 3개는 "번호 API(winType*)"에서 가져오므로 여기서는 의미없음(0 유지)
   autoWin?: number;
   semiAutoWin?: number;
   manualWin?: number;
@@ -13,335 +13,177 @@ export interface LottoStoreInfo {
 export interface LottoResult {
   round: number;
   stores: LottoStoreInfo[];
+
+  // 기존 구조 유지용(사용 안 해도 됨)
   autoWin: number;
   semiAutoWin: number;
   manualWin: number;
 }
 
-export async function fetchLottoStores(round: number): Promise<LottoResult> {
-  let browser: Browser | null = null;
+type WnShopItem = {
+  shpNm?: string;
+  shpAddr?: string;
+  wnShpRnk?: number;
+  atmtPsvYnTxt?: string; // ✅ 다시 사용
+};
+
+type WnShopResponse = {
+  resultCode: string | null;
+  resultMessage: string | null;
+  data?: {
+    total?: number;
+    list?: WnShopItem[];
+  };
+};
+
+const getWinnerShopAPI = (round: number, rank: 1 | 2) =>
+  `https://www.dhlottery.co.kr/wnprchsplcsrch/selectLtWnShp.do?srchWnShpRnk=${rank}&srchLtEpsd=${round}`;
+
+function normalizeAddress(raw: string) {
+  const s = (raw ?? "").replace(/\s+/g, " ").trim();
+  if (!s) return "";
+
+  // 1) 연속 중복 토큰 제거
+  const tokens = s.split(" ");
+  const out: string[] = [];
+  for (const t of tokens) {
+    if (out.length > 0 && out[out.length - 1] === t) continue;
+    out.push(t);
+  }
+
+  // 2) 뒤쪽 반복 블록 제거 (A B A B / X X)
+  for (let k = 1; k <= 4; k++) {
+    if (out.length >= 2 * k) {
+      const tail = out.slice(-k).join(" ");
+      const prev = out.slice(-2 * k, -k).join(" ");
+      if (tail === prev) {
+        out.splice(out.length - k, k);
+        break;
+      }
+    }
+  }
+
+  return out.join(" ").trim();
+}
+
+function applyStoreType(store: LottoStoreInfo, rank: 1 | 2, typeTxt?: string) {
+  const t = (typeTxt ?? "").trim();
+
+  // ----------------------------
+  // ✅ 2등: 타입이 "있으면" 분리 저장,
+  //        타입이 "없거나/인식불가"면 기존처럼 autoWin에 누적
+  // ----------------------------
+  if (rank === 2) {
+    if (t) {
+      // 타입 문자열이 제공되는 경우: 우선 분리 시도
+      if (t.includes("반자동")) {
+        store.semiAutoWin = (store.semiAutoWin ?? 0) + 1;
+        return;
+      }
+      if (t.includes("수동")) {
+        store.manualWin = (store.manualWin ?? 0) + 1;
+        return;
+      }
+      if (t.includes("자동")) {
+        store.autoWin = (store.autoWin ?? 0) + 1;
+        return;
+      }
+
+      // ✅ 타입 문자열은 있는데 우리가 모르는 값이면 → 기존 호환을 위해 auto로 처리
+      store.autoWin = (store.autoWin ?? 0) + 1;
+      return;
+    }
+
+    // ✅ 타입 문자열 자체가 없으면(레거시) → 기존처럼 auto에 총합 누적
+    store.autoWin = (store.autoWin ?? 0) + 1;
+    return;
+  }
+
+  // ----------------------------
+  // ✅ 1등: 기존 로직 유지 (분리 저장)
+  // ----------------------------
+  if (t.includes("반자동")) store.semiAutoWin = (store.semiAutoWin ?? 0) + 1;
+  else if (t.includes("수동")) store.manualWin = (store.manualWin ?? 0) + 1;
+  else if (t.includes("자동")) store.autoWin = (store.autoWin ?? 0) + 1;
+  else {
+    // 혹시 빈 값/예외 값이면 안전하게 자동로 처리
+    store.autoWin = (store.autoWin ?? 0) + 1;
+  }
+}
+
+async function fetchJsonWithTimeout<T>(
+  url: string,
+  timeoutMs = 7000
+): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const url = `https://www.dhlottery.co.kr/store.do?method=topStore&pageGubun=L645&drwNo=${round}`;
-    const isProd = process.env.NODE_ENV === "production";
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: "application/json, text/plain, */*" },
+    });
+    if (!res.ok) throw new Error(`HTTP_${res.status}`);
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
-    const findChromiumPath = () => {
-      const paths = [
-        "/usr/bin/chromium-browser",
-        "/usr/bin/chromium",
-        "/usr/bin/google-chrome",
-        "/snap/bin/chromium",
-      ];
-      const fs = require("fs");
-      for (const path of paths) {
-        if (fs.existsSync(path)) return path;
-      }
-      return undefined;
+async function fetchStoresByRank(
+  round: number,
+  rank: 1 | 2
+): Promise<LottoStoreInfo[]> {
+  const url = getWinnerShopAPI(round, rank);
+  const json = await fetchJsonWithTimeout<WnShopResponse>(url);
+
+  const list = json?.data?.list ?? [];
+  const map = new Map<string, LottoStoreInfo>();
+
+  for (const item of list) {
+    const storeName = item.shpNm?.trim();
+    const address = normalizeAddress(item.shpAddr ?? "");
+
+    if (!storeName || !address) continue;
+
+    const key = `${rank}|${storeName}|${address}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        rank,
+        store: storeName,
+        address,
+        autoWin: 0,
+        semiAutoWin: 0,
+        manualWin: 0,
+      });
+    }
+
+    // ✅ 업체 기준 타입 누적
+    applyStoreType(map.get(key)!, rank, item.atmtPsvYnTxt);
+  }
+
+  return Array.from(map.values());
+}
+
+export async function fetchLottoStores(round: number): Promise<LottoResult> {
+  try {
+    const [first, second] = await Promise.all([
+      fetchStoresByRank(round, 1),
+      fetchStoresByRank(round, 2),
+    ]);
+
+    return {
+      round,
+      stores: [...first, ...second],
+      autoWin: 0,
+      semiAutoWin: 0,
+      manualWin: 0,
     };
-
-    browser = await puppeteer.launch({
-      headless: true,
-      executablePath: isProd ? findChromiumPath() : undefined,
-      args: isProd
-        ? [
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-gpu",
-            "--no-zygote",
-            "--single-process",
-            "--disable-web-security",
-            "--disable-features=IsolateOrigins,site-per-process",
-            "--disable-blink-features=AutomationControlled",
-            "--window-size=1920,1080",
-          ]
-        : ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-
-    console.log(`[INFO][${round}] Browser launched successfully (1+2등)`);
-
-    const page = await browser.newPage();
-
-    // 🔥 Request Interception으로 모바일 리다이렉트 차단
-    await page.setRequestInterception(true);
-
-    page.on("request", (request) => {
-      const requestUrl = request.url();
-
-      // 모바일 사이트로 가는 요청 차단
-      if (requestUrl.includes("m.dhlottery.co.kr")) {
-        console.log(`[BLOCK] Mobile redirect blocked: ${requestUrl}`);
-        request.abort();
-        return;
-      }
-
-      // 불필요한 리소스 차단 (속도 향상)
-      if (
-        ["image", "stylesheet", "font", "media"].includes(
-          request.resourceType()
-        )
-      ) {
-        request.abort();
-        return;
-      }
-
-      request.continue();
-    });
-
-    // Viewport 설정
-    await page.setViewport({
-      width: 1920,
-      height: 1080,
-      deviceScaleFactor: 1,
-    });
-
-    // 자동화 감지 우회
-    await page.evaluateOnNewDocument(() => {
-      Object.defineProperty(navigator, "webdriver", {
-        get: () => false,
-      });
-
-      Object.defineProperty(navigator, "platform", {
-        get: () => "Win32",
-      });
-
-      Object.defineProperty(navigator, "vendor", {
-        get: () => "Google Inc.",
-      });
-
-      (window as any).chrome = {
-        runtime: {},
-      };
-    });
-
-    // User-Agent 설정
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-        "AppleWebKit/537.36 (KHTML, like Gecko) " +
-        "Chrome/120.0.0.0 Safari/537.36"
-    );
-
-    // Headers 설정
-    await page.setExtraHTTPHeaders({
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-      "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-      "Accept-Encoding": "gzip, deflate, br",
-      Connection: "keep-alive",
-      "Upgrade-Insecure-Requests": "1",
-    });
-
-    console.log(`[INFO][${round}] Navigating to ${url} (1+2등)`);
-
-    await page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: 60000,
-    });
-
-    const currentUrl = page.url();
-    console.log(`[INFO][${round}] Page loaded, URL: ${currentUrl} (1+2등)`);
-
-    // 리다이렉트 체크
-    if (currentUrl.includes("m.dhlottery")) {
-      console.log(`[ERROR][${round}] Mobile redirect occurred! (1+2등)`);
-      return { round, stores: [], autoWin: 0, semiAutoWin: 0, manualWin: 0 };
-    }
-
-    // 충분한 대기 시간
-    console.log(`[INFO][${round}] Waiting for content to render... (1+2등)`);
-    await new Promise((r) => setTimeout(r, 5000));
-
-    // 접속 대기 팝업 처리
-    try {
-      const popupExists = await page.evaluate(() => {
-        return !!document.querySelector("div.popup.conn_wait_pop");
-      });
-
-      if (popupExists) {
-        console.log(`[INFO][${round}] 접속 대기 팝업 감지 (1+2등)`);
-        await page.waitForFunction(
-          () => !document.querySelector("div.popup.conn_wait_pop"),
-          { timeout: 30000 }
-        );
-        console.log(`[INFO][${round}] 팝업 사라짐 (1+2등)`);
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-    } catch (err) {
-      console.log(`[INFO][${round}] 팝업 처리 중 타임아웃 또는 없음 (1+2등)`);
-    }
-
-    // --- 1등 크롤링 ---
-    console.log(`[INFO][${round}] Crawling 1등...`);
-
-    const firstPrizeStores: LottoStoreInfo[] = await page.evaluate(() => {
-      const group = Array.from(
-        document.querySelectorAll("div.group_content")
-      ).find((div) => {
-        const title = div.querySelector("h4.title")?.textContent?.trim() ?? "";
-        return title.includes("1등");
-      });
-
-      if (!group) return [];
-
-      const table = group.querySelector("table.tbl_data.tbl_data_col");
-      if (!table) return [];
-
-      const storeMap: Record<string, LottoStoreInfo> = {};
-
-      Array.from(table.querySelectorAll("tbody tr")).forEach((tr) => {
-        const tds = tr.querySelectorAll("td");
-        if (tds.length < 4) return;
-
-        const store = tds[1]?.textContent?.trim();
-        const typeText = tds[2]?.textContent?.trim() ?? "";
-        const address = tds[3]?.textContent?.trim();
-
-        if (!store || !address) return;
-
-        const key = `${store}|${address}`;
-
-        if (!storeMap[key]) {
-          storeMap[key] = {
-            rank: 1,
-            store,
-            address,
-            autoWin: 0,
-            semiAutoWin: 0,
-            manualWin: 0,
-          };
-        }
-
-        if (typeText.includes("자동")) storeMap[key].autoWin!++;
-        if (typeText.includes("반자동")) storeMap[key].semiAutoWin!++;
-        if (typeText.includes("수동")) storeMap[key].manualWin!++;
-      });
-
-      return Object.values(storeMap);
-    });
-
-    console.log(`[INFO][${round}] Found ${firstPrizeStores.length} 1등 stores`);
-
-    // --- 2등 크롤링 (페이지네이션) ---
-    console.log(`[INFO][${round}] Crawling 2등...`);
-
-    const secondPrizeStoresMap: Record<string, LottoStoreInfo> = {};
-
-    // 페이지네이션 확인
-    const maxPages = await page.evaluate(() => {
-      const pageBox = document.querySelector("div.paginate_common");
-      if (!pageBox) return 1;
-      const pages = Array.from(pageBox.querySelectorAll("a"))
-        .map((a) => Number(a.textContent?.trim()))
-        .filter((n) => !isNaN(n));
-      return pages.length > 0 ? Math.max(...pages) : 1;
-    });
-
-    console.log(`[INFO][${round}] 2등 페이지 수: ${maxPages}`);
-
-    for (let p = 1; p <= maxPages; p++) {
-      console.log(`[INFO][${round}] Processing 2등 page ${p}/${maxPages}`);
-
-      if (p > 1) {
-        // 🔥 개선: waitForNavigation 사용
-        try {
-          await Promise.all([
-            page.waitForNavigation({
-              waitUntil: "domcontentloaded",
-              timeout: 30000,
-            }),
-            page.evaluate((pageNum) => {
-              // @ts-ignore
-              if (typeof selfSubmit === "function") {
-                // @ts-ignore
-                selfSubmit(pageNum);
-              }
-            }, p),
-          ]);
-
-          console.log(`[INFO][${round}] Page ${p} loaded`);
-
-          // 추가 대기
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-        } catch (err) {
-          console.log(
-            `[WARN][${round}] Failed to navigate to page ${p}, breaking loop`
-          );
-          break;
-        }
-      }
-
-      // 페이지 내 2등 테이블 가져오기
-      const storesOnPage: LottoStoreInfo[] = await page.evaluate(() => {
-        const group = Array.from(
-          document.querySelectorAll("div.group_content")
-        ).find((div) => {
-          const title =
-            div.querySelector("h4.title")?.textContent?.trim() ?? "";
-          return title.includes("2등");
-        });
-
-        if (!group) return [];
-
-        const table = group.querySelector("table.tbl_data.tbl_data_col");
-        if (!table) return [];
-
-        return Array.from(table.querySelectorAll("tbody tr")).map((tr) => {
-          const tds = tr.querySelectorAll("td");
-          const store = tds[1]?.textContent?.trim() || "";
-          const address = tds[2]?.textContent?.trim() || "";
-          return { rank: 2, store, address, autoWin: 1 };
-        });
-      });
-
-      console.log(
-        `[INFO][${round}] Page ${p} found ${storesOnPage.length} 2등 stores`
-      );
-
-      // 중복 업체 autoWin 누적
-      for (const store of storesOnPage) {
-        const key = store.store + "|" + store.address;
-        if (secondPrizeStoresMap[key]) {
-          secondPrizeStoresMap[key].autoWin! += 1;
-        } else {
-          secondPrizeStoresMap[key] = store;
-        }
-      }
-    }
-
-    const totalSecondStores = Object.values(secondPrizeStoresMap).length;
-    console.log(`[INFO][${round}] Total 2등 stores: ${totalSecondStores}`);
-
-    const allStores = [
-      ...firstPrizeStores,
-      ...Object.values(secondPrizeStoresMap),
-    ];
-
-    // 1등 기준 전체 합
-    const autoWin = firstPrizeStores.reduce(
-      (sum, s) => sum + (s.autoWin || 0),
-      0
-    );
-    const semiAutoWin = firstPrizeStores.reduce(
-      (sum, s) => sum + (s.semiAutoWin || 0),
-      0
-    );
-    const manualWin = firstPrizeStores.reduce(
-      (sum, s) => sum + (s.manualWin || 0),
-      0
-    );
-
-    console.log(
-      `[SUCCESS][${round}] Total stores: ${allStores.length} (1등: ${firstPrizeStores.length}, 2등: ${totalSecondStores})`
-    );
-
-    return { round, stores: allStores, autoWin, semiAutoWin, manualWin };
   } catch (err: any) {
     console.error(
-      `❌ 회차 ${round} 상위 판매점 데이터 수집 실패:`,
-      err.message
+      `❌ 회차 ${round} 판매점(JSON) 수집 실패:`,
+      err?.message ?? err
     );
     return { round, stores: [], autoWin: 0, semiAutoWin: 0, manualWin: 0 };
-  } finally {
-    if (browser) await browser.close();
   }
 }

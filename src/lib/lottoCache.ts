@@ -19,15 +19,30 @@ const toNumber = (value: any): number => {
   return Number.isFinite(num) ? num : 0;
 };
 
+// ✅ null이면 null, 값이 있으면 number로
+const toNumberOrNull = (value: any): number | null => {
+  if (value === null || value === undefined) return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+
 // ✅ 문자열 정규화 (중요)
 const normalize = (v: string) => v.replace(/\s+/g, " ").trim();
 
 export const toOptimized = (item: LottoNumber): OptimizedLottoNumber => ({
   ...item,
+
+  // 1등
   firstPrzwnerCo: toNumber(item.firstPrzwnerCo),
   firstWinamnt: toNumber(item.firstWinamnt),
   totSellamnt: toNumber(item.totSellamnt),
   firstAccumamnt: toNumber(item.firstAccumamnt),
+
+  // ✅ 2등: 방법 A에서는 string | null 이므로 null을 보존해야 "0" 가짜값이 안 생김
+  secondPrzwnerCo: toNumberOrNull(item.secondPrzwnerCo),
+  secondWinamnt: toNumberOrNull(item.secondWinamnt),
+  secondAccumamnt: toNumberOrNull(item.secondAccumamnt),
+
   sum:
     toNumber(item.drwtNo1) +
     toNumber(item.drwtNo2) +
@@ -41,8 +56,11 @@ export async function initializeLottoCache() {
   console.log(">>> 전체 데이터 캐싱 시작");
 
   const records = await prisma.lottoNumber.findMany();
+
   records.forEach((record) => {
-    lottoCache.set(record.drwNo, record);
+    // ✅ 방법 A 적용 후에는 Prisma record 타입이 LottoNumber와 호환됨 (2등이 null로 들어옴)
+    lottoCache.set(record.drwNo, record as unknown as LottoNumber);
+
     if (record.drwNoDate instanceof Date) {
       drwNoDateByRound.set(record.drwNo, record.drwNoDate);
     }

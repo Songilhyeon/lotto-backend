@@ -82,6 +82,75 @@ const queryHandlers: Record<string, HandlerWithLimit> = {
     const sorted = [...data].sort((a, b) => a.sum - b.sum);
     return sorted.slice(0, limit);
   },
+
+  /* =========================
+   * [1등] 이월(1등 0명) 회차만 보기
+   * - 최신 회차가 먼저 나오게 정렬(내림차순)
+   * ========================= */
+  rollover1: (data, limit = 50) => {
+    const filtered = data.filter((item) => item.firstPrzwnerCo === 0);
+    const sorted = [...filtered].sort((a, b) => b.drwNo - a.drwNo);
+    return sorted.slice(0, limit);
+  },
+
+  /* =========================
+   * [1등] 최저 당첨자 수 (0명 제외)
+   * ========================= */
+  minWinners1: (data, limit = 5) => {
+    const filtered = data.filter((item) => item.firstPrzwnerCo > 0);
+    const sorted = [...filtered].sort(
+      (a, b) => a.firstPrzwnerCo - b.firstPrzwnerCo
+    );
+    return sorted.slice(0, limit);
+  },
+
+  /* =========================
+   * [2등] 1인당 최고/최저 당첨금
+   * ========================= */
+  maxWin2: (data, limit = 5) => {
+    const filtered = data.filter(
+      (item) => typeof item.secondWinamnt === "number" && item.secondWinamnt > 0
+    );
+    const sorted = [...filtered].sort(
+      (a, b) => (b.secondWinamnt ?? 0) - (a.secondWinamnt ?? 0)
+    );
+    return sorted.slice(0, limit);
+  },
+
+  minWin2: (data, limit = 5) => {
+    const filtered = data.filter(
+      (item) => typeof item.secondWinamnt === "number" && item.secondWinamnt > 0
+    );
+    const sorted = [...filtered].sort(
+      (a, b) => (a.secondWinamnt ?? 0) - (b.secondWinamnt ?? 0)
+    );
+    return sorted.slice(0, limit);
+  },
+
+  /* =========================
+   * [2등] 최고/최저 당첨자 수
+   * ========================= */
+  maxWinners2: (data, limit = 5) => {
+    const filtered = data.filter(
+      (item) =>
+        typeof item.secondPrzwnerCo === "number" && item.secondPrzwnerCo > 0
+    );
+    const sorted = [...filtered].sort(
+      (a, b) => (b.secondPrzwnerCo ?? 0) - (a.secondPrzwnerCo ?? 0)
+    );
+    return sorted.slice(0, limit);
+  },
+
+  minWinners2: (data, limit = 5) => {
+    const filtered = data.filter(
+      (item) =>
+        typeof item.secondPrzwnerCo === "number" && item.secondPrzwnerCo > 0
+    );
+    const sorted = [...filtered].sort(
+      (a, b) => (a.secondPrzwnerCo ?? 0) - (b.secondPrzwnerCo ?? 0)
+    );
+    return sorted.slice(0, limit);
+  },
 };
 
 /* -----------------------------
@@ -137,6 +206,11 @@ router.get("/", (req: Request, res: Response) => {
     output = [result];
   } // null이면 빈 배열
 
+  const toStringOrNull = (v: unknown): string | null => {
+    if (v === null || v === undefined) return null;
+    return String(v);
+  };
+
   // 5) 숫자 문자열 변환 (일관성 유지 - API 계약 준수)
   // OptimizedLottoNumber -> LottoNumber (string fields)
   const normalized: LottoNumber[] = output.map((item) => {
@@ -148,6 +222,11 @@ router.get("/", (req: Request, res: Response) => {
       firstPrzwnerCo: String(item.firstPrzwnerCo),
       totSellamnt: String(item.totSellamnt),
       firstAccumamnt: String(item.firstAccumamnt),
+
+      // ✅ 2등은 string | null 로 맞추기
+      secondPrzwnerCo: toStringOrNull(item.secondPrzwnerCo),
+      secondWinamnt: toStringOrNull(item.secondWinamnt),
+      secondAccumamnt: toStringOrNull(item.secondAccumamnt),
     };
   });
 

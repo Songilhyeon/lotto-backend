@@ -1,20 +1,17 @@
 import { Router, Request, Response } from "express";
-import { LottoNumber } from "../types/lotto";
-import { ApiResponse } from "../types/api";
 import { prisma } from "../app";
 import { lottoCache, sortedLottoCache, toOptimized } from "../lib/lottoCache";
 
 const router = Router();
 
-// 동행복권 API URL 생성
-const getLottoAPI = (round: string | number) =>
-  `https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=${round}`;
-
-// GET /api/lotto/:round
+/**
+ * GET /api/lotto/:round
+ * - 캐시 → DB 조회만 수행 (외부 동행복권 API 호출 제거)
+ */
 router.get("/:round", async (req: Request, res: Response) => {
   const round = Number(req.params.round);
 
-  if (isNaN(round) || round <= 0) {
+  if (!Number.isFinite(round) || round <= 0) {
     return res.status(400).json({
       success: false,
       error: "INVALID_ROUND",
@@ -22,95 +19,112 @@ router.get("/:round", async (req: Request, res: Response) => {
     });
   }
 
+  // 1) 메모리 캐시
   const cached = lottoCache.get(round);
   if (cached) {
     return res.json({ success: true, data: cached, message: "cached data" });
   }
 
   try {
-    // DB 조회
+    // 2) DB 조회
     const record = await prisma.lottoNumber.findUnique({
       where: { drwNo: round },
     });
 
-    if (record) {
-      lottoCache.set(round, record);
-
-      return res.json({
-        success: true,
-        data: record,
-        message: "database data",
-      });
-    }
-
-    // -----------------------------
-    // 5초 Timeout 적용된 fetch
-    // -----------------------------
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    // API 요청
-    const apiUrl = getLottoAPI(round);
-    const response = await fetch(apiUrl, { signal: controller.signal });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      return res.status(502).json({
-        success: false,
-        error: "API_FETCH_FAILED",
-        message: "동행복권 서버에서 데이터를 가져오지 못했습니다.",
-      });
-    }
-
-    const apiData = await response.json();
-
-    // ❗ 에러 처리: returnValue 가 fail이면 존재하지 않는 회차
-    if (apiData.returnValue !== "success") {
+    if (!record) {
       return res.status(404).json({
         success: false,
         error: "ROUND_NOT_FOUND",
-        message: `${round}회차는 아직 발표되지 않았습니다.`,
+        message: `${round}회차 데이터가 존재하지 않습니다.`,
       });
     }
 
-    const saved = await prisma.lottoNumber.create({
-      data: {
-        drwNo: apiData.drwNo,
-        drwNoDate: new Date(apiData.drwNoDate),
-        drwtNo1: apiData.drwtNo1,
-        drwtNo2: apiData.drwtNo2,
-        drwtNo3: apiData.drwtNo3,
-        drwtNo4: apiData.drwtNo4,
-        drwtNo5: apiData.drwtNo5,
-        drwtNo6: apiData.drwtNo6,
-        bnusNo: apiData.bnusNo,
-        firstPrzwnerCo: apiData.firstPrzwnerCo.toString(),
-        firstWinamnt: apiData.firstWinamnt.toString(),
-        totSellamnt: apiData.totSellamnt.toString(),
-        firstAccumamnt: apiData.firstAccumamnt.toString(),
-      },
-    });
+    // 3) 캐시 적재
+    lottoCache.set(round, record);
 
-    lottoCache.set(round, saved);
-    sortedLottoCache.push(toOptimized(saved));
-    sortedLottoCache.sort((a, b) => a.drwNo - b.drwNo);
+    // 4) sorted cache 갱신(안전하게 중복 방지)
+    //    - toOptimized가 drwNo를 포함한다고 가정
+    const opt = toOptimized(record);
+    const exists = sortedLottoCache.some((x) => x.drwNo === opt.drwNo);
+
+    if (!exists) {
+      sortedLottoCache.push(opt);
+      sortedLottoCache.sort((a, b) => a.drwNo - b.drwNo);
+    }
 
     return res.json({
       success: true,
-      data: saved,
-      message: "API data",
+      data: record,
+      message: "database data",
     });
-  } catch (err: any) {
-    console.error("API Error:", err);
+  } catch (err) {
+    console.error("SERVER Error:", err);
+    return res.status(500).json({
+      success: false,
+      error: "SERVER_ERROR",
+      message: "서버 오류가 발생했습니다.",
+    });
+  }
+});
 
-    if (err.name === "AbortError") {
-      return res.status(504).json({
+/**
+ * (옵션) GET /api/lotto/latest
+ * - 프론트에서 최신회차 확인용으로 쓰면 UX 좋아짐
+ */
+router.get("/latest", async (_req: Request, res: Response) => {
+  try {
+    // 1) sorted cache에 있으면 최우선
+    const last = sortedLottoCache.length
+      ? sortedLottoCache[sortedLottoCache.length - 1]
+      : null;
+
+    if (last) {
+      // last가 optimized 형태라면, 원본 레코드도 바로 주고 싶을 수 있음
+      // 여기서는 가볍게 drwNo만으로 DB 조회해서 full record 반환
+      const record = await prisma.lottoNumber.findUnique({
+        where: { drwNo: last.drwNo },
+      });
+
+      if (record) {
+        lottoCache.set(record.drwNo, record);
+        return res.json({
+          success: true,
+          data: record,
+          message: "latest (sorted cache)",
+        });
+      }
+    }
+
+    // 2) fallback: DB에서 최신 회차 1개
+    const record = await prisma.lottoNumber.findFirst({
+      orderBy: { drwNo: "desc" },
+    });
+
+    if (!record) {
+      return res.status(404).json({
         success: false,
-        error: "API_TIMEOUT",
-        message: "동행복권 서버 응답 시간이 초과되었습니다.",
+        error: "NO_DATA",
+        message: "저장된 로또 데이터가 없습니다.",
       });
     }
 
+    lottoCache.set(record.drwNo, record);
+
+    // sorted cache도 채워두기
+    const opt = toOptimized(record);
+    const exists = sortedLottoCache.some((x) => x.drwNo === opt.drwNo);
+    if (!exists) {
+      sortedLottoCache.push(opt);
+      sortedLottoCache.sort((a, b) => a.drwNo - b.drwNo);
+    }
+
+    return res.json({
+      success: true,
+      data: record,
+      message: "latest (db)",
+    });
+  } catch (err) {
+    console.error("SERVER Error:", err);
     return res.status(500).json({
       success: false,
       error: "SERVER_ERROR",

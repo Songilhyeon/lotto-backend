@@ -13,6 +13,11 @@ export interface LottoNumber {
   totSellamnt: string;
   firstAccumamnt: string;
 
+  // ✅ 2등: Prisma String? -> string | null
+  secondPrzwnerCo: string | null;
+  secondWinamnt: string | null;
+  secondAccumamnt: string | null;
+
   autoWin: number | null;
   semiAutoWin: number | null;
   manualWin: number | null;
@@ -29,11 +34,23 @@ export interface MatchResult {
 export interface OptimizedLottoNumber
   extends Omit<
     LottoNumber,
-    "firstPrzwnerCo" | "firstWinamnt" | "totSellamnt" | "firstAccumamnt"
+    | "firstPrzwnerCo"
+    | "firstWinamnt"
+    | "totSellamnt"
+    | "firstAccumamnt"
+    | "secondPrzwnerCo"
+    | "secondWinamnt"
+    | "secondAccumamnt"
   > {
   firstPrzwnerCo: number;
   firstWinamnt: number;
   totSellamnt: number;
   firstAccumamnt: number;
+
+  // ✅ Optimized도 null 유지 (가짜 0 방지 + 타입 충돌 제거)
+  secondPrzwnerCo: number | null;
+  secondWinamnt: number | null;
+  secondAccumamnt: number | null;
+
   sum: number;
 }
