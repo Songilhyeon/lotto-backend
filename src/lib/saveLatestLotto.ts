@@ -44,7 +44,7 @@ function parseLottoApi(apiData: any) {
       secondWinamnt: String(row.rnk2WnAmt ?? "0"),
       secondAccumamnt: String(row.rnk2SumWnAmt ?? "0"),
 
-      totSellamnt: String(row.rlvtEpsdSumNtslAmt ?? "0"), // 회차 판매금액(네가 쓰던 필드 목적에 맞게)
+      totSellamnt: String(row.wholEpsdSumNtslAmt ?? "0"), // 회차 판매금액(네가 쓰던 필드 목적에 맞게)
     };
   }
 
