@@ -10,7 +10,10 @@ import { initializePremiumCache } from "../lib/premiumCache";
 // ------------------------------
 // 프리미엄 분석 API
 // ------------------------------
-export async function getPremiumAnalysis(req: Request, res: Response) {
+export async function getPremiumAnalysisController(
+  req: Request,
+  res: Response
+) {
   try {
     const round = Number(req.query.round);
     if (isNaN(round) || round < 1) {

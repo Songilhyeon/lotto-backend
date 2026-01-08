@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { LottoNumber, OptimizedLottoNumber } from "../types/lotto";
 import { ApiResponse } from "../types/api";
 import { sortedLottoCache } from "../lib/lottoCache";
+import { getNumbers } from "../utils/lottoNumberUtils";
 
 const router = Router();
 
@@ -10,16 +11,6 @@ const toNumber = (value: any): number => {
   const num = Number(value);
   return Number.isFinite(num) ? num : 0;
 };
-
-// 번호 배열 추출 헬퍼
-const getNumbers = (item: OptimizedLottoNumber): number[] => [
-  toNumber(item.drwtNo1),
-  toNumber(item.drwtNo2),
-  toNumber(item.drwtNo3),
-  toNumber(item.drwtNo4),
-  toNumber(item.drwtNo5),
-  toNumber(item.drwtNo6),
-];
 
 type HandlerReturn = OptimizedLottoNumber | OptimizedLottoNumber[] | null;
 type HandlerWithLimit = (

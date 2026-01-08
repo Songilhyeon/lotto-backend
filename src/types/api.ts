@@ -3,6 +3,7 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+  nextRound?: T;
 }
 
 export interface NumberScoreDetail {

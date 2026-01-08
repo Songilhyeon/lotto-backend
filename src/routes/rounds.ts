@@ -2,6 +2,8 @@ import { Router, Request, Response } from "express";
 import { LottoNumber } from "../types/lotto";
 import { ApiResponse } from "../types/api";
 import { sortedLottoCache } from "../lib/lottoCache";
+import { OptimizedLottoNumber } from "../types/lotto";
+import { getNumbers } from "../utils/lottoNumberUtils";
 
 const router = Router();
 
@@ -82,11 +84,23 @@ router.get("/", async (req: Request, res: Response) => {
     };
   });
 
+  const checkNextRound: OptimizedLottoNumber | undefined =
+    sortedLottoCache.find((rec) => endRaw + 1 === rec.drwNo);
+
+  const nextRound = checkNextRound
+    ? {
+        round: checkNextRound.drwNo,
+        numbers: getNumbers(checkNextRound),
+        bonus: checkNextRound.bnusNo,
+      }
+    : null;
+
   return res.json({
     success: true,
     data: normalized,
+    nextRound,
     message: `${start}~${end} 회차 로또 데이터`,
-  } satisfies ApiResponse<LottoNumber[]>);
+  });
 });
 
 export default router;

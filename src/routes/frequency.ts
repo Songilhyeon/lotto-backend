@@ -1,19 +1,9 @@
 import { Router, Request, Response } from "express";
 import { sortedLottoCache } from "../lib/lottoCache";
-import { LottoNumber, OptimizedLottoNumber } from "../types/lotto";
+import { getNumbersWithBonus } from "../utils/lottoNumberUtils";
+import { OptimizedLottoNumber } from "../types/lotto";
 
 const router = Router();
-
-// 로또 번호 배열 가져오기
-const getNumbers = (item: OptimizedLottoNumber, isBonus: boolean) => [
-  Number(item.drwtNo1),
-  Number(item.drwtNo2),
-  Number(item.drwtNo3),
-  Number(item.drwtNo4),
-  Number(item.drwtNo5),
-  Number(item.drwtNo6),
-  ...(isBonus ? [Number(item.bnusNo)] : []),
-];
 
 interface AnalysisResult {
   round: number;
@@ -64,12 +54,12 @@ router.get("/", async (req: Request, res: Response) => {
 
   records.forEach((rec) => {
     // includeBonus가 true이면 보너스 번호 추가
-    const nums = getNumbers(rec, includeBonus);
+    const nums = getNumbersWithBonus(rec, includeBonus);
     nums.forEach((n) => frequency[n]++);
   });
 
   const roundResults: AnalysisResult[] = records.map((item) => {
-    const nums = getNumbers(item, includeBonus).sort((a, b) => a - b);
+    const nums = getNumbersWithBonus(item, includeBonus).sort((a, b) => a - b);
     return {
       round: item.drwNo,
       numbers: nums,
@@ -82,7 +72,7 @@ router.get("/", async (req: Request, res: Response) => {
   const nextRound: NextRound | null = checkNextRound
     ? {
         round: checkNextRound.drwNo,
-        numbers: getNumbers(checkNextRound, false),
+        numbers: getNumbersWithBonus(checkNextRound, false),
         bonus: Number(checkNextRound.bnusNo),
       }
     : null;

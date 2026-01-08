@@ -1,7 +1,7 @@
 // aiRecommenderAdvanced.ts
 import { analyzePremiumRound, PremiumAnalysisResult } from "./premiumAnalyzer";
 import { sortedLottoCache } from "../lib/lottoCache";
-import { OptimizedLottoNumber } from "../types/lotto";
+import { getNumbers } from "../utils/lottoNumberUtils";
 import { normalizeScores } from "../utils/normalizeScores";
 import { NumberScoreDetail } from "../types/api";
 import { getPremiumRound } from "../lib/premiumCache";
@@ -86,15 +86,6 @@ export const AiPresets: AiPreset[] = [
       nextFreq: 2,
     },
   },
-];
-
-const getNumbers = (item: OptimizedLottoNumber) => [
-  item.drwtNo1,
-  item.drwtNo2,
-  item.drwtNo3,
-  item.drwtNo4,
-  item.drwtNo5,
-  item.drwtNo6,
 ];
 
 /* ---------- Advanced AI ---------- */

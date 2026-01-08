@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { sortedLottoCache } from "../lib/lottoCache";
 import { OptimizedLottoNumber } from "../types/lotto";
 import { ApiResponse } from "../types/api";
+import { getNumbersWithBonus } from "../utils/lottoNumberUtils";
 
 const router = Router();
 
@@ -25,18 +26,6 @@ interface ApiData {
   nextRound: { round: number; numbers: number[]; bonus: number } | null;
   ranges: { "10": RangeResult; "7": RangeResult; "5": RangeResult };
 }
-
-/** 번호 가져오기 */
-const getNumbers = (item: OptimizedLottoNumber, includeBonus: boolean) =>
-  [
-    item.drwtNo1,
-    item.drwtNo2,
-    item.drwtNo3,
-    item.drwtNo4,
-    item.drwtNo5,
-    item.drwtNo6,
-    ...(includeBonus ? [item.bnusNo] : []),
-  ].map(Number);
 
 /** 구간 카운트 */
 function getRangeCounts(numbers: number[], unit: number) {
@@ -63,7 +52,7 @@ function findMatchingRounds(
   const matches: MatchingRoundInfo[] = [];
 
   for (const rec of searchRounds) {
-    const numbers = getNumbers(rec, includeBonus);
+    const numbers = getNumbersWithBonus(rec, includeBonus);
     const counts = getRangeCounts(numbers, unit);
 
     const matched = Object.keys(targetCounts).every(
@@ -74,7 +63,7 @@ function findMatchingRounds(
     if (!matched) continue;
 
     const next = sortedLottoCache.find((i) => i.drwNo === rec.drwNo + 1);
-    const nextNumbers = next ? getNumbers(next, includeBonus) : [];
+    const nextNumbers = next ? getNumbersWithBonus(next, includeBonus) : [];
 
     const nextFreq: Record<number, number> = {};
     for (let i = 1; i <= 45; i++) nextFreq[i] = 0;
@@ -140,15 +129,15 @@ router.get("/", (req: Request, res: Response) => {
       message: `${end} 회차 데이터를 찾을 수 없습니다.`,
     } satisfies ApiResponse<null>);
   }
-  const selectedNumbers = getNumbers(selected, includeBonus);
-  const numbers = getNumbers(selected, false);
+  const selectedNumbers = getNumbersWithBonus(selected, includeBonus);
+  const numbers = getNumbersWithBonus(selected, false);
 
   /** 다음 회차 NextRound 추가 */
   const next = sortedLottoCache.find((i) => i.drwNo === end + 1);
   const nextRound = next
     ? {
         round: next.drwNo,
-        numbers: getNumbers(next, false),
+        numbers: getNumbersWithBonus(next, false),
         bonus: next.bnusNo,
       }
     : null;

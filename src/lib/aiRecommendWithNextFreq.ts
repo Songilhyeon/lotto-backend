@@ -3,7 +3,7 @@ import { analyzePremiumRound, PremiumAnalysisResult } from "./premiumAnalyzer";
 import { normalizeScores } from "../utils/normalizeScores";
 import { AiFeatureHelper } from "./aiFeatures";
 import { sortedLottoCache } from "../lib/lottoCache";
-import { OptimizedLottoNumber } from "../types/lotto";
+import { getNumbers } from "../utils/lottoNumberUtils";
 import { NumberScoreDetail } from "../types/api";
 
 export interface WeightConfig {
@@ -26,15 +26,6 @@ export interface AIRecommendResult {
     bonus: number;
   } | null;
 }
-
-const getNumbers = (item: OptimizedLottoNumber) => [
-  Number(item.drwtNo1),
-  Number(item.drwtNo2),
-  Number(item.drwtNo3),
-  Number(item.drwtNo4),
-  Number(item.drwtNo5),
-  Number(item.drwtNo6),
-];
 
 export async function recommendAIWithNextFreq(
   rounds: PremiumLottoRecord[],

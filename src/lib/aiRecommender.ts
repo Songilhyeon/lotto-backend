@@ -2,21 +2,12 @@ import { analyzePremiumRound } from "./premiumAnalyzer";
 import { computeAiScore } from "./aiScoreCalculator";
 import { normalizeScores } from "../utils/normalizeScores";
 import { sortedLottoCache } from "../lib/lottoCache";
-import { OptimizedLottoNumber } from "../types/lotto";
+import { getNumbers } from "../utils/lottoNumberUtils";
 
 interface AiRecommendOptions {
   round: number;
   clusterUnit?: number; // 기본값 5
 }
-
-const getNumbers = (item: OptimizedLottoNumber) => [
-  Number(item.drwtNo1),
-  Number(item.drwtNo2),
-  Number(item.drwtNo3),
-  Number(item.drwtNo4),
-  Number(item.drwtNo5),
-  Number(item.drwtNo6),
-];
 
 export async function getAiRecommendation({
   round,

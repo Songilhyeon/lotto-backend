@@ -3,7 +3,7 @@ import { auth } from "../middlewares/authMiddleware";
 import { requireAdmin } from "../middlewares/roleGuards";
 import { publicRecommendLimiter } from "../middlewares/rateLimiters";
 import {
-  getPremiumAnalysis,
+  getPremiumAnalysisController,
   rebuildPremiumCache,
 } from "../controllers/premiumController";
 import { getAiRecommendationController } from "../controllers/aiRecommendController";
@@ -12,6 +12,7 @@ import { getAiRecommenderAdvancedController } from "../controllers/aiRecommender
 import { getAiRecommenderVariantController } from "../controllers/aiRecommenderVariantController";
 import { analyzeIntervalController } from "../controllers/analyzeIntervalController";
 import { analyzeRoundPatternController } from "../controllers/analyzeRoundPatternController";
+import { getPremiumNextFreqController } from "../controllers/premiumNextFreqController";
 
 const router = Router();
 
@@ -26,11 +27,13 @@ router.get(
 // ✅ 2) 그 외는 로그인 필요 — 여기서부터 auth 적용
 router.use(auth);
 
-router.get("/analysis", getPremiumAnalysis);
+router.get("/analysis", getPremiumAnalysisController);
 router.post("/recommend-advanced", getAiRecommenderAdvancedController);
 router.post("/recommend-variant", getAiRecommenderVariantController);
 router.get("/analysis/interval", analyzeIntervalController);
 router.get("/analysis/round-dist", analyzeRoundPatternController);
+router.get("/analysis/advanced", getPremiumNextFreqController);
+router.post("/analysis/advanced", getPremiumNextFreqController);
 
 // ✅ 3) 위험 작업은 관리자만
 router.post("/rebuild-cache", requireAdmin, rebuildPremiumCache);

@@ -1,20 +1,11 @@
 import { Router, Request, Response } from "express";
 import { sortedLottoCache } from "../lib/lottoCache";
-import { OptimizedLottoNumber } from "../types/lotto";
+import { getNumbersWithBonus } from "../utils/lottoNumberUtils";
 import { ApiResponse } from "../types/api";
 import { buildNextRoundPreviewSummary } from "../lib/nextRoundSummary";
+import { OptimizedLottoNumber } from "../types/lotto";
 
 const router = Router();
-
-const getNumbers = (item: OptimizedLottoNumber, includeBonus: boolean) => [
-  Number(item.drwtNo1),
-  Number(item.drwtNo2),
-  Number(item.drwtNo3),
-  Number(item.drwtNo4),
-  Number(item.drwtNo5),
-  Number(item.drwtNo6),
-  ...(includeBonus ? [Number(item.bnusNo)] : []),
-];
 
 // --- 타입 ---
 interface AnalysisResult {
@@ -85,8 +76,8 @@ router.get("/", (req: Request, res: Response) => {
     } satisfies ApiResponse<null>);
   }
 
-  const selectedNumbers = getNumbers(selected, includeBonus);
-  const numbers = getNumbers(selected, false);
+  const selectedNumbers = getNumbersWithBonus(selected, includeBonus);
+  const numbers = getNumbersWithBonus(selected, false);
   const selectedRound: SelectedRound = {
     round: selected.drwNo,
     numbers: numbers,
@@ -101,12 +92,14 @@ router.get("/", (req: Request, res: Response) => {
 
   const allResults: InternalResult[] = records
     .map((item) => {
-      const numbers = getNumbers(item, includeBonus);
+      const numbers = getNumbersWithBonus(item, includeBonus);
       const matchCount = numbers.filter((n) =>
         selectedNumbers.includes(n)
       ).length;
       const nextItem = sortedLottoCache.find((i) => i.drwNo === item.drwNo + 1);
-      const nextNumbers = nextItem ? getNumbers(nextItem, includeBonus) : [];
+      const nextNumbers = nextItem
+        ? getNumbersWithBonus(nextItem, includeBonus)
+        : [];
       return {
         round: item.drwNo,
         numbers,
@@ -140,7 +133,7 @@ router.get("/", (req: Request, res: Response) => {
   const nextRound = checkNextRound
     ? {
         round: checkNextRound.drwNo,
-        numbers: getNumbers(checkNextRound, false),
+        numbers: getNumbersWithBonus(checkNextRound, false),
         bonus: checkNextRound.bnusNo,
       }
     : null;
