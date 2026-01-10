@@ -196,9 +196,9 @@ export async function saveLatestLotto(round: number) {
           store: store.store,
           address: store.address ?? "",
           rank: store.rank ?? 0,
-          autoWin: 0,
-          semiAutoWin: 0,
-          manualWin: 0,
+          autoWin: store.autoWin ?? 0,
+          semiAutoWin: store.semiAutoWin ?? 0,
+          manualWin: store.manualWin ?? 0,
         });
       }
     }
